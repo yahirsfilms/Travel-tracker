@@ -499,6 +499,7 @@ export function linkBookingRecord(t, b, transactionId, date, note) {
 }
 
 export function validateState(s) {
+  if (s.settings !== undefined && (!s.settings || typeof s.settings !== "object" || (s.settings.appearance !== undefined && !["light","dark","system"].includes(s.settings.appearance)))) fail("Invalid appearance settings.");
   if (
     s.schemaVersion !== 2 ||
     !s.fund ||
@@ -619,6 +620,7 @@ export function makeBackup(s) {
     fund: structuredClone(s.fund),
     trips: structuredClone(s.trips),
     referenceFunds: structuredClone(s.referenceFunds || []),
+    ...(s.settings ? {settings: structuredClone(s.settings)} : {}),
   };
 }
 export function parseBackup(data) {
@@ -639,6 +641,7 @@ export function parseBackup(data) {
     schemaVersion: 2,
     revision: 0,
     active: data.trips[0]?.id || null,
+    ...(data.settings ? {settings: structuredClone(data.settings)} : {}),
   });
 }
 export function restoreBackup(s, data, mode = "copies") {

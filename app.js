@@ -86,11 +86,36 @@ function toast(s) {
   $("#toast").style.display = "block";
   setTimeout(() => ($("#toast").style.display = "none"), 5000);
 }
-function modal(html) {
-  $("#dialog-content").innerHTML = html;
-  $("#dialog").showModal();
+const drafts = new Map();
+let modalKey = "";
+function rememberDraft() {
+ const form = $("#dialog form");
+ if (!form || !modalKey) return;
+ const values = [...form.elements].filter(e=>e.id && e.type!=="file" && !["submit","button"].includes(e.type)).map(e=>({id:e.id,value:e.value,checked:e.checked}));
+ if (form.dataset.dirty === "true") drafts.set(modalKey, values);
 }
-const close = () => $("#dialog").close();
+function modal(html) {
+ rememberDraft();
+ $("#dialog-content").innerHTML = html;
+ const heading = $("#dialog h2");
+ if (heading) { heading.id="dialog-title"; $("#dialog").setAttribute("aria-labelledby","dialog-title"); }
+ const form = $("#dialog form");
+ modalKey = (trip()?.id || "global") + ":" + (form?.dataset.draftKey || form?.id || "") + ":" + (heading?.textContent || "");
+ const saved = drafts.get(modalKey);
+ if (form && saved) {
+   for (const v of saved) { const e=document.getElementById(v.id); if(e) {e.value=v.value;if(e.type==="checkbox")e.checked=v.checked;} }
+   form.dataset.dirty="true";
+ }
+ if (form) form.addEventListener("input",()=>form.dataset.dirty="true");
+ const error=document.createElement("p");error.id="form-error";error.className="notice negative";error.setAttribute("role","alert");error.hidden=true;
+ $("#dialog-content").prepend(error);
+ if (!$("#dialog").open) $("#dialog").showModal();
+}
+const close = (saved = true) => {
+ if (saved) drafts.delete(modalKey); else rememberDraft();
+ $("#dialog").close();
+};
+$("#dialog").addEventListener("cancel",e=>{e.preventDefault();close(false);});
 function options(list, value) {
   return list
     .map(
@@ -117,8 +142,8 @@ async function change(fn) {
   const next = structuredClone(state);
   fn(next);
   if (
-    JSON.stringify([next.trips, next.fund]) !==
-    JSON.stringify([state.trips, state.fund])
+    JSON.stringify([next.trips, next.fund, next.settings]) !==
+    JSON.stringify([state.trips, state.fund, state.settings])
   )
     next.backupNeeded = true;
   await commit(next);
@@ -415,12 +440,15 @@ function bookingForm(id) {
 }
 
 function render() {
+  applyAppearance(state.settings?.appearance || "system");
   status();
   document
     .querySelectorAll("[data-tab]")
-    .forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+    .forEach((b) => { b.classList.toggle("active", b.dataset.tab === tab); if(b.dataset.tab===tab)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current"); });
   const t = trip();
   $("#trip-picker").textContent = t ? "Trips ▾" : "Trips +";
+  if (tab === "settings") { renderSettings(); return; }
+  if (tab === "money") { renderMoney(); return; }
   if (!t) {
     $("#main").innerHTML =
       fundCard() +
@@ -584,7 +612,7 @@ function expenseForm(id) {
     old = t.transactions.find((x) => x.id === id),
     defDate = today();
   modal(
-    `<h2>${old ? "Edit expense" : "A little stop along the way."}</h2><form id="expense-form"><div class="grid"><div>${field("amount", "Amount", old ? Math.abs(old.amount) / 100 : "", "number", 'required min="0.01" step="0.01" inputmode="decimal" autofocus')}</div><div><label for="expense-currency">Currency</label><select id="expense-currency">${options(currencies, old?.currency || t.expenseCurrency || t.currency)}</select></div></div><label for="kind">Record type</label><select id="kind"><option value="expense">Expense</option><option value="refund" ${old?.amount < 0 ? "selected" : ""}>Refund · returns money to this pool</option></select><div class="grid"><div><label for="category">Category</label><select id="category">${options(["Food & drink", "Activities", "Shopping", "Hotel", "Transportation", "Emergency", "Other"], old?.category || "Food & drink")}</select></div><div><label for="pool">Budget pool</label><select id="pool">${options(POOLS, old?.pool || "daily")}</select></div></div><div id="booking-suggestion" hidden><label for="expense-booking">Pay an existing booking?</label><select id="expense-booking"><option value="">Separate purchase · not a booking payment</option>${t.bookings.filter(b => !b.cancelled).map(b => `<option value="${esc(b.id)}" data-pool="${b.pool}">${esc(b.name)} · ${money(bookingStatus(t,b).unpaid)} unpaid</option>`).join("")}</select><p class="small">Choose the booking to reduce its unpaid balance exactly once.</p></div><div id="refund-options" hidden><label for="refund-original">Original expense</label><select id="refund-original"><option value="">Choose original expense</option>${t.transactions.filter(x => x.base > 0 && !x.bookingId && x.id !== id).map(x => `<option value="${esc(x.id)}" ${old?.refundOf === x.id ? "selected" : ""}>${esc(x.date)} · ${esc(x.category)} · ${money(x.base)}</option>`).join("")}</select><label class="check-label"><input id="unmatched-credit" type="checkbox" ${old?.unmatchedCredit ? "checked" : ""}>This is an unmatched credit I have actually received</label><p class="small">Pending refunds are not money received. Confirm the cash change before saving.</p></div>${dateField("date", "Date", old?.date || defDate)}${field("rate", `1 expense currency = how many ${t.currency}?`, old?.rate || t.rates?.[t.expenseCurrency] || 1, "number", 'required min="0.000001" max="1000000" step="any" inputmode="decimal"')}<p class="small" id="conversion"></p>${field("note", "Note · optional", old?.note || "", "text", 'maxlength="1000" placeholder="Noodles near the station"')}${footer(old ? "Save changes" : "Save expense")}${old ? '<button type="button" class="danger" style="width:100%;margin-top:12px" data-action="delete-expense" data-id="' + esc(id) + '">Delete expense</button>' : ""}</form>`,
+    `<h2>${old ? "Edit expense" : "A little stop along the way."}</h2><form id="expense-form" data-draft-key="expense-${esc(id || 'new')}"><div class="grid"><div>${field("amount", "Amount", old ? Math.abs(old.amount) / 100 : "", "number", 'required min="0.01" step="0.01" inputmode="decimal" autofocus')}</div><div><label for="expense-currency">Currency</label><select id="expense-currency">${options(currencies, old?.currency || t.expenseCurrency || t.currency)}</select></div></div><label for="kind">Record type</label><select id="kind"><option value="expense">Expense</option><option value="refund" ${old?.amount < 0 ? "selected" : ""}>Refund · returns money to this pool</option></select><div class="grid"><div><label for="category">Category</label><select id="category">${options(["Food & drink", "Activities", "Shopping", "Hotel", "Transportation", "Emergency", "Other"], old?.category || "Food & drink")}</select></div><div><label for="pool">Budget pool</label><select id="pool">${options(POOLS, old?.pool || "daily")}</select></div></div><div id="booking-suggestion" hidden><label for="expense-booking">Pay an existing booking?</label><select id="expense-booking"><option value="">Separate purchase · not a booking payment</option>${t.bookings.filter(b => !b.cancelled).map(b => `<option value="${esc(b.id)}" data-pool="${b.pool}">${esc(b.name)} · ${money(bookingStatus(t,b).unpaid)} unpaid</option>`).join("")}</select><p class="small">Choose the booking to reduce its unpaid balance exactly once.</p></div><div id="refund-options" hidden><label for="refund-original">Original expense</label><select id="refund-original"><option value="">Choose original expense</option>${t.transactions.filter(x => x.base > 0 && !x.bookingId && x.id !== id).map(x => `<option value="${esc(x.id)}" ${old?.refundOf === x.id ? "selected" : ""}>${esc(x.date)} · ${esc(x.category)} · ${money(x.base)}</option>`).join("")}</select><label class="check-label"><input id="unmatched-credit" type="checkbox" ${old?.unmatchedCredit ? "checked" : ""}>This is an unmatched credit I have actually received</label><p class="small">Pending refunds are not money received. Confirm the cash change before saving.</p></div>${dateField("date", "Date", old?.date || defDate)}${field("rate", `1 expense currency = how many ${t.currency}?`, old?.rate || t.rates?.[t.expenseCurrency] || 1, "number", 'required min="0.000001" max="1000000" step="any" inputmode="decimal"')}<p class="small" id="conversion"></p>${field("note", "Note · optional", old?.note || "", "text", 'maxlength="1000" placeholder="Noodles near the station"')}${footer(old ? "Save changes" : "Save expense")}${old ? '<button type="button" class="danger" style="width:100%;margin-top:12px" data-action="delete-expense" data-id="' + esc(id) + '">Delete expense</button>' : ""}</form>`,
   );
   const update = () => {
     const isRefund = $("#kind").value === "refund";
@@ -782,9 +810,14 @@ function importFile() {
 async function action(fn) {
   if (busy) return;
   busy = true;
+  const submits=[...document.querySelectorAll('button[type="submit"]')];
+  submits.forEach(b=>b.disabled=true);
+  if($("#form-error")) $("#form-error").hidden=true;
   try {
     await fn();
   } catch (e) {
+    const error=$("#form-error");
+    if(error && $("#dialog").open) {error.textContent=e.message || "Could not save. Your draft is retained.";error.hidden=false;error.tabIndex=-1;error.focus();}
     toast(
       e.name === "AbortError"
         ? "Export cancelled."
@@ -792,6 +825,7 @@ async function action(fn) {
     );
   } finally {
     busy = false;
+    submits.forEach(b=>b.disabled=false);
   }
 }
 document.addEventListener("click", (e) => {
@@ -829,7 +863,8 @@ document.addEventListener("click", (e) => {
         "application/json",
       );
     }
-    if (a === "close") close();
+    if (a === "close") close(false);
+    if (a === "verify-backup") { await change(n=>{n.lastBackupVerified=new Date().toISOString();}); toast("File verification noted. Keep your external backup."); }
     if (a === "new-trip") tripForm();
     if (a === "settings") tripForm(true);
     if (a === "expense") expenseForm();
@@ -999,3 +1034,24 @@ function correctionForm(id) {
  $("#correction-form").oninput=preview;preview();
  $("#correction-form").onsubmit=e=>{e.preventDefault();action(async()=>{await change(n=>{const tr=n.trips.find(a=>a.id===t.id);correctBookingTransaction(tr,tr.bookings.find(a=>a.id===b.id),id,{amount:cents($("#correction-amount").value),currency:x.currency,rate:Number($("#correction-rate").value),date:$("#correction-date").value,note:$("#correction-note").value.trim(),asOf:today()});});close();toast("Correction saved. Earlier values retained in history.");});};
 }
+
+function applyAppearance(mode) {
+ const dark = mode === "dark" || (mode === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+ document.documentElement.dataset.theme=mode;
+ document.documentElement.dataset.dark=String(dark);
+ document.querySelector('meta[name="theme-color"]').content=dark?"#101c18":"#f3f5ef";
+ try {localStorage.setItem("roam-appearance",mode);} catch {}
+}
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>applyAppearance(state?.settings?.appearance||"system"));
+function backupPanel() {
+ return `<section class="card backup"><h2>Keep a copy</h2><p class="small">Complete JSON includes your fund, every trip and accounting history. CSV cannot restore Roam.</p><p class="small">Last export prepared: ${state.lastBackup?esc(new Date(state.lastBackup).toLocaleString()):"Never"}<br>Last file verified: ${state.lastBackupVerified?esc(new Date(state.lastBackupVerified).toLocaleString()):"Not yet"}</p>${state.backupNeeded || !state.lastBackup ? '<div class="notice">Changes need a fresh export.</div>' : '<p class="small">Verify the exported file in Files; export preparation alone does not confirm it was saved.</p>'}<div class="stack"><button data-action="export">Export complete backup · JSON</button><button class="quiet" data-action="import">Restore or import a backup</button><button class="quiet" data-action="verify-backup">I verified the file in Files</button>${trip()?'<button class="link" data-action="csv">Export this trip · CSV</button>':''}</div><p class="small">Clearing website data or losing this device can remove local records. Keep an external copy.</p></section>`;
+}
+function renderSettings() {
+ $("#main").innerHTML=`<h1>Settings & backups</h1><section class="card"><h2>Appearance</h2><label for="appearance">Theme</label><select id="appearance">${options(["system","light","dark"],state.settings?.appearance||"system")}</select><p class="small">System follows your device. Your choice works offline.</p></section>${backupPanel()}`;
+ $("#appearance").onchange=e=>action(async()=>{const mode=e.target.value;await change(n=>{n.settings={...n.settings,appearance:mode};});});
+}
+function renderMoney() {
+ const f=fundStats(state),c=state.fund.currency;
+ $("#main").innerHTML=`<h1>Shared travel money</h1>${fundCard()}<p class="small">Actual money includes received payments and refunds. Allocations are plans; pending refunds are excluded.</p><section class="card"><h2>Remaining trip allocations</h2>${state.trips.filter(t=>t.included).map(t=>`<div class="entry row"><strong>${esc(t.name)}</strong><span>${money(allocation(t)-spent(t),t.currency)}</span></div>`).join("")}<p class="small">${money(Math.max(0,f.unallocated),c)} unallocated${f.shortfall?" · "+money(f.shortfall,c)+" funding shortfall":""}. Unpaid costs beyond a trip's allocation are protected too.</p></section><button data-action="fund">Compare actual balance / record money</button>`;
+}
+$(".brand").addEventListener("click",e=>{e.preventDefault();tab="today";render();window.scrollTo(0,0);});

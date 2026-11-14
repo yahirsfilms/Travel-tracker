@@ -16,7 +16,7 @@
     <link rel="icon" href="./icon.svg" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <link rel="stylesheet" href="./style.css" />
-    <title>Roam · Travel budget</title>
+    <script>try{const t=localStorage.getItem("roam-appearance")||"system";document.documentElement.dataset.theme=t;document.documentElement.dataset.dark=String(t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches));}catch{}</script><title>Roam · Travel budget</title>
   </head>
   <body>
     <div class="shell">
@@ -27,14 +27,14 @@
               <path d="M6 18 18 6M6 6h12v12" /></svg
           ></span>
           roam<span class="tag">TRAVEL BUDGET</span></a
-        ><button id="trip-picker" class="quiet">Trips ▾</button>
+        ><div class="header-actions"><button id="trip-picker" class="quiet">Trips ▾</button><button data-tab="settings" class="quiet" aria-label="Settings and backups">Settings</button></div>
       </header>
       <div id="status" class="status" role="status">Opening your notebook…</div>
       <main id="main"></main>
       <nav aria-label="Main navigation">
         <button data-tab="today">◷ <span>Today</span></button
         ><button data-tab="history">☷ <span>History</span></button
-        ><button data-tab="trip">◇ <span>Trip</span></button>
+        ><button data-tab="trip">◇ <span>Trips</span></button><button data-tab="money">◎ <span>Money</span></button>
       </nav>
     </div>
     <dialog id="dialog"><div id="dialog-content"></div></dialog>

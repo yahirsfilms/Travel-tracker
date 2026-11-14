@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {migrateState,initializeFund,addBooking,bookingTransaction,bookingStatus,fundStats,correctBookingTransaction,saveExpense,makeBackup,parseBackup,validateState} from '../accounting.js';
+import {migrateState,initializeFund,addBooking,bookingTransaction,bookingStatus,fundStats,correctBookingTransaction,saveExpense,makeBackup,parseBackup,validateState,closeTrip,safeSummary} from '../accounting.js';
 const date='2027-06-01';
 function make(){const t={id:'china',name:'China',start:date,end:'2027-06-10',zone:'Asia/Shanghai',currency:'USD',budgets:{daily:100000,hotels:50000,transport:20000,emergency:30000},reserved:{},adjustments:[],transactions:[]};const s=migrateState({trips:[t],active:t.id,revision:0});initializeFund(s,400000,'USD',{},date);return s;}
 const rec=(id,base,extra={})=>({id,date,amount:base,base,currency:'USD',rate:1,pool:'daily',category:'Food',note:'',...extra});
@@ -12,3 +12,7 @@ test('partial ordinary refunds cap at original and never change a pending refund
 test('ordinary entry rejects zero-round and future payment',()=>{const t=make().trips[0];assert.throws(()=>saveExpense(t,rec('z',0,{amount:1,currency:'JPY',rate:0.0067}),undefined,date));assert.throws(()=>saveExpense(t,rec('f',100,{date:'2027-06-02'}),undefined,date));});
 test('ordinary edit preserves history and foreign input',()=>{const t=make().trips[0];saveExpense(t,rec('a',1400,{amount:10000,currency:'CNY',rate:.14}),undefined,date);saveExpense(t,rec('a',2800,{amount:20000,currency:'CNY',rate:.14}),'a',date);assert.equal(t.changes[0].before.amount,10000);assert.equal(t.transactions[0].base,2800);});
 test('appearance roundtrips without changing funds and rejects unknown modes',()=>{const s=make();s.settings={appearance:'dark'};assert.deepEqual(parseBackup(makeBackup(s)).settings,s.settings);assert.equal(fundStats(s).actual,400000);s.settings.appearance='broken';assert.throws(()=>validateState(s));});
+
+test('closing releases only unused plans and retains cash/history/targets',()=>{const s=make(),t=s.trips[0];saveExpense(t,rec('a',10000),undefined,date);const actual=fundStats(s).actual,original=t.originalTarget;closeTrip(s,t,date,'Finished');assert.equal(fundStats(s).actual,actual);assert.equal(t.transactions.length,1);assert.equal(t.originalTarget,original);assert.equal(safeSummary(s,t,date).safeToday,0);assert.equal(fundStats(s).unallocated,actual);assert.equal(parseBackup(makeBackup(s)).trips[0].closed,true);});
+test('unpaid bookings prevent closing without changing records',()=>{const s=make(),t=s.trips[0];addBooking(t,{name:'Hotel',pool:'hotels',total:50000,date});const before=structuredClone(s);assert.throws(()=>closeTrip(s,t,date,'Finished'));assert.deepEqual(s,before);});
+test('estimated dates roundtrip and invalid certainty is rejected',()=>{const s=make();s.trips[0].dateCertainty='estimated';assert.equal(parseBackup(makeBackup(s)).trips[0].dateCertainty,'estimated');s.trips[0].dateCertainty='unknown';assert.throws(()=>validateState(s));});

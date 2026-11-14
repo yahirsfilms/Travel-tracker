@@ -33,6 +33,7 @@ import {
   restoreBackup,
   correctBookingTransaction,
   saveExpense,
+  closeTrip,
 } from "./accounting.js";
 const $ = (s) => document.querySelector(s),
   esc = (s) =>
@@ -460,14 +461,14 @@ function render() {
   const date = today(),
     s = safeSummary(state, t, date);
   if (tab === "today") {
-    $("#main").innerHTML = `${fundCard()}<div class="row"><h1>${esc(t.name)}</h1><span class="pill">${s.status}${t.dateCertainty === "estimated" ? " · Estimated" : ""}</span></div><p class="sub">${esc(date)} · ${s.days} travel days remaining · ${esc(t.zone)}</p><section class="hero"><div class="eyebrow">${s.status === "Completed" ? "Trip complete" : s.status === "Upcoming" ? "Projected first-day allowance" : "Left to spend today"}</div><div class="amount">${money(s.safeToday)}</div><div class="row"><div><div class="small">${s.status === "Upcoming"?"First-day":"Today's"} allowance</div><strong>${money(s.allowance)}</strong></div><div><div class="small">${s.status === "Upcoming"?"Spent on first day":"Spent today"}</div><strong>${money(s.spent)}</strong></div></div></section>${s.remaining < 0 ? `<div class="notice negative">${money(-s.remaining)} over today's allowance. ${s.tomorrow !== null ? "Next day's allowance is " + money(s.tomorrow) + ". The remaining daily budget is spread across " + (s.days-1) + " days." : "No travel days remain to redistribute this overrun."}</div>` : ""}<div class="row small"><span>Original daily target</span><strong>${money(s.original)}</strong></div><div class="row small projection"><span>${s.status === "Upcoming" ? "Second travel day" : "Tomorrow"}</span><strong>${s.tomorrow === null ? "No remaining days" : money(s.tomorrow)}</strong></div>${s.tomorrow !== null ? '<p class="small projection-note">Projection assumes no more spending today.</p>' : ""}${s.needsSetup ? `<div class="notice">${t.included ? "Set up actual funds to calculate safe spending." : "Read-only reference · excluded from live money."}</div>` : ""}${s.shortfall ? `<div class="notice negative">Funding shortfall ${money(s.shortfall)}. Review allocations or compare your actual balance.</div>` : ""}<button class="primary" data-action="expense" ${!t.included?'disabled':''}>＋ Add expense</button><div class="row"><h2>Protected budgets</h2><button class="link" data-tab="trip">Details</button></div><div class="pool-strip">${["hotels","transport","emergency"].map(p=>`<div class="card"><div class="small">${p==="transport"?"Transport":names[p]}</div><strong class="${balance(t,p)<0?'negative':''}">${money(balance(t,p))}</strong>${commitment(t,p)?`<div class="small">${money(commitment(t,p))} unpaid</div>`:''}</div>`).join('')}</div>${state.backupNeeded ? '<button class="backup-reminder link" data-tab="settings">Changes need a fresh backup →</button>' : ""}<section class="section"><div class="row"><h2>Recent activity</h2><button class="link" data-tab="history">See all</button></div>${entries(recentTransactions(t).slice(0,4))}</section>`;
+    $("#main").innerHTML = `${fundCard()}<div class="row"><h1>${esc(t.name)}</h1><span class="pill">${s.status}${t.dateCertainty === "estimated" ? " · Estimated" : ""}</span></div><p class="sub">${esc(date)} · ${s.days} travel days remaining · ${esc(t.zone)}</p><section class="hero"><div class="eyebrow">${["Completed","Closed"].includes(s.status) ? "Trip complete" : s.status === "Upcoming" ? "Projected first-day allowance" : "Left to spend today"}</div><div class="amount">${money(s.safeToday)}</div><div class="row"><div><div class="small">${s.status === "Upcoming"?"First-day":"Today's"} allowance</div><strong>${money(s.allowance)}</strong></div><div><div class="small">${s.status === "Upcoming"?"Spent on first day":"Spent today"}</div><strong>${money(s.spent)}</strong></div></div></section>${s.remaining < 0 ? `<div class="notice negative">${money(-s.remaining)} over today's allowance. ${s.tomorrow !== null ? "Next day's allowance is " + money(s.tomorrow) + ". The remaining daily budget is spread across " + (s.days-1) + " days." : "No travel days remain to redistribute this overrun."}</div>` : ""}<div class="row small"><span>Original daily target</span><strong>${money(s.original)}</strong></div><div class="row small projection"><span>${s.status === "Upcoming" ? "Second travel day" : "Tomorrow"}</span><strong>${s.tomorrow === null ? "No remaining days" : money(s.tomorrow)}</strong></div>${s.tomorrow !== null ? '<p class="small projection-note">Projection assumes no more spending today.</p>' : ""}${s.needsSetup ? `<div class="notice">${t.included ? "Set up actual funds to calculate safe spending." : "Read-only reference · excluded from live money."}</div>` : ""}${s.shortfall ? `<div class="notice negative">Funding shortfall ${money(s.shortfall)}. Review allocations or compare your actual balance.</div>` : ""}<button class="primary" data-action="expense" ${!t.included?'disabled':''}>＋ Add expense</button><div class="row"><h2>Protected budgets</h2><button class="link" data-tab="trip">Details</button></div><div class="pool-strip">${["hotels","transport","emergency"].map(p=>`<div class="card"><div class="small">${p==="transport"?"Transport":names[p]}</div><strong class="${balance(t,p)<0?'negative':''}">${money(balance(t,p))}</strong>${commitment(t,p)?`<div class="small">${money(commitment(t,p))} unpaid</div>`:''}</div>`).join('')}</div>${state.backupNeeded ? '<button class="backup-reminder link" data-tab="settings">Changes need a fresh backup →</button>' : ""}<section class="section"><div class="row"><h2>Recent activity</h2><button class="link" data-tab="history">See all</button></div>${entries(recentTransactions(t).slice(0,4))}</section>`;
   } else if (tab === "history") {
     $("#main").innerHTML =
       `<div class="eyebrow">${esc(t.name)}</div><div class="row"><h1>Your travel trail.</h1><button data-action="expense">＋ Add</button></div><p class="sub">Every little stop, all in one place.</p><div class="toolbar"><input id="search" aria-label="Search expenses" placeholder="Search expenses" value="${esc(query)}"><select id="pool-filter" aria-label="Filter budget pool"><option value="">All budgets</option>${options(POOLS, filter)}</select></div><div id="entries"></div>`;
     renderEntries();
   } else {
     $("#main").innerHTML =
-      `${fundCard()}<div class="eyebrow">Trip overview</div><h1>${esc(t.name)}</h1><p class="sub">${esc(t.start)} → ${esc(t.end)} · ${esc(t.currency)}<br>${esc(t.zone)}</p><div class="row"><h2>Budget, your way.</h2><button class="quiet" data-action="adjust">Adjust budget</button></div><div class="notice">Plans are separate from actual money. Safe daily spending protects other trips, emergency funds, and unpaid commitments.</div>${POOLS.map(
+      `${fundCard()}<div class="eyebrow">Trip overview · ${t.closed ? "Closed" : t.dateCertainty || "Dates recorded"}</div><h1>${esc(t.name)}</h1><p class="sub">${esc(t.start)} → ${esc(t.end)} · ${esc(t.currency)}<br>${esc(t.zone)}</p><div class="row"><h2>Budget, your way.</h2><button class="quiet" data-action="adjust">Adjust budget</button></div><div class="notice">Plans are separate from actual money. Safe daily spending protects other trips, emergency funds, and unpaid commitments.</div>${POOLS.map(
         (p) => {
           const b = balance(t, p),
             total =
@@ -479,7 +480,7 @@ function render() {
         },
       ).join(
         "",
-      )}<div class="actions"><button class="quiet" data-action="settings">Trip settings</button><button class="quiet" data-action="bookings">Bookings & bills</button></div>${bookingCards()}<button class="link" data-action="reserve">Other unpaid commitments</button><div class="section"><h2>Budget adjustment history</h2>${
+      )}<div class="actions"><button class="quiet" data-action="settings">Trip settings</button><button class="quiet" data-action="bookings">Bookings & bills</button></div>${bookingCards()}<button class="link" data-action="reserve">Other unpaid commitments · advanced</button>${t.included && !t.closed ? '<button class="link" data-action="close-trip">Close trip & review unused allocations</button>' : ''}<div class="section"><h2>Budget adjustment history</h2>${
         t.adjustments.length
           ? t.adjustments
               .slice()
@@ -523,10 +524,21 @@ function tripForm(edit = false) {
     return;
   }
   const t = edit ? trip() : null;
-  const d = new Date().toISOString().slice(0, 10);
+  const d = dateInZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
   modal(
-    `<h2>${edit ? "Trip settings" : "Where to next?"}</h2><form id="trip-form">${field("name", "Trip name", t?.name || "", "text", 'required maxlength="100" placeholder="China summer trip"')}<div class="grid"><div>${dateField("start", "First day", t?.start || d)}</div><div>${dateField("end", "Last day", t?.end || d)}</div></div><label for="currency">Planning currency</label><select id="currency" ${edit ? "disabled" : ""}>${options(edit ? currencies : [state.fund.currency], t?.currency || state.fund.currency)}</select>${field("zone", "Trip time zone", t?.zone || "Asia/Shanghai", "text", 'required placeholder="Asia/Shanghai"')}<p class="small">Use an IANA time zone, such as Asia/Shanghai or America/Los_Angeles.${edit ? " Planning currency is fixed to preserve recorded conversions." : ""}</p>${edit ? "" : `<div class="grid">${POOLS.map((p) => `<div>${field(p, names[p] + " budget", "0", "number", 'required min="0" step="0.01" inputmode="decimal"')}</div>`).join("")}</div>`}${footer(edit ? "Save settings" : "Create trip")}</form>`,
+    `<h2>${edit ? "Trip settings" : "Where to next?"}</h2><form id="trip-form">${field("name", "Trip name", t?.name || "", "text", 'required maxlength="100" placeholder="China summer trip"')}<div class="grid"><div>${dateField("start", "First day", t?.start || d)}</div><div>${dateField("end", "Last day", t?.end || d)}</div></div><label for="date-certainty">Travel dates</label><select id="date-certainty">${options(["estimated","confirmed"],t?.dateCertainty||"estimated")}</select><p class="small">Estimated dates give provisional allowances. You can change them without deleting expenses.</p>${edit ? "" : field("trip-allocation","Trip allocation in " + state.fund.currency,"0","number",'required min="0" step="0.01" inputmode="decimal"')}<label for="destination-zone">Destination</label><select id="destination-zone"><option value="Asia/Shanghai">China · Shanghai time</option><option value="Asia/Tokyo">Japan · Tokyo time</option><option value="Asia/Hong_Kong">Hong Kong</option><option value="America/Los_Angeles">Los Angeles</option><option value="custom">Another time zone</option></select><label for="currency">Planning currency</label><select id="currency" ${edit ? "disabled" : ""}>${options(edit ? currencies : [state.fund.currency], t?.currency || state.fund.currency)}</select>${field("zone", "Trip time zone", t?.zone || "Asia/Shanghai", "text", 'required placeholder="Asia/Shanghai"')}<p class="small">${edit ? "Planning currency stays fixed to preserve recorded conversions." : "New plans use your shared fund currency. Purchases can use local currencies."}</p>${edit ? "" : `<div class="grid">${POOLS.map((p) => `<div>${field(p, names[p] + " budget", "0", "number", 'required min="0" step="0.01" inputmode="decimal"')}</div>`).join("")}</div>`}<p class="notice" id="distribution-preview"></p>${footer(edit ? "Save settings" : "Create trip")}</form>`,
   );
+  const zoneSelect=$("#destination-zone"), zoneInput=$("#zone");
+  zoneSelect.value=[...zoneSelect.options].some(o=>o.value===zoneInput.value)?zoneInput.value:"custom";
+  const zoneUpdate=()=>{const custom=zoneSelect.value==="custom";zoneInput.hidden=!custom;document.querySelector('label[for="zone"]').hidden=!custom;if(!custom)zoneInput.value=zoneSelect.value;};
+  zoneSelect.onchange=zoneUpdate;zoneUpdate();
+  const distribution=()=>{
+    if(edit){$("#distribution-preview").textContent="Change allocations from Adjust budget; settings preserve your recorded original daily target.";return;}
+    const total=cents($("#trip-allocation").value||0), sum=POOLS.reduce((v,p)=>v+cents($("#"+p).value||0),0);
+    $("#distribution-preview").textContent="Allocated " + money(total,state.fund.currency) + " · Distributed " + money(sum,state.fund.currency) + (total===sum?" · Balanced":" · Difference "+money(total-sum,state.fund.currency));
+  };
+  if(!edit){const allocate=()=>{try{$("#daily").value=Math.max(0,cents($("#trip-allocation").value||0)-["hotels","transport","emergency"].reduce((v,p)=>v+cents($("#"+p).value||0),0))/100;distribution();}catch{}};$("#trip-allocation").oninput=allocate;for(const p of ["hotels","transport","emergency"])$("#"+p).oninput=allocate;$("#daily").oninput=distribution;}
+  distribution();
   $("#trip-form").onsubmit = async (e) => {
     e.preventDefault();
     await action(async () => {
@@ -556,11 +568,12 @@ function tripForm(edit = false) {
           });
           Object.assign(
             n.trips.find((x) => x.id === t.id),
-            { name, start, end, zone },
+            { name, start, end, zone, dateCertainty: $("#date-certainty").value },
           );
         } else {
           const id = uid();
           const total = POOLS.reduce((v, p) => v + cents($("#" + p).value), 0);
+          if(total!==cents($("#trip-allocation").value)) throw Error("Budget distribution must equal the trip allocation.");
           if (!n.fund.initialized)
             throw Error("Set up the actual travel fund first.");
           if (total > Math.max(0, fundStats(n).unallocated))
@@ -577,6 +590,7 @@ function tripForm(edit = false) {
             ),
             included: true,
             fundRate: 1,
+            dateCertainty: $("#date-certainty").value,
             originalTarget: Math.floor(
               cents($("#daily").value) /
                 (dayNumber(end) - dayNumber(start) + 1),
@@ -711,6 +725,8 @@ function adjustForm() {
         "",
       )}</select><label for="to">Destination pool</label><select id="to">${options(POOLS, "daily")}</select>${field("adjust-amount", "Amount in " + trip().currency, "", "number", 'required min="0.01" step="0.01" inputmode="decimal"')}${field("reason", "Reason", "", "text", 'required maxlength="1000"')}${footer("Apply")}</form>`,
   );
+  const adjustmentMode=()=>{const transfer=$("#mode").value==="transfer";for(const id of ["target-trip","to"]){$("#"+id).hidden=!transfer;document.querySelector('label[for="'+id+'"]').hidden=!transfer;}};
+  $("#mode").onchange=adjustmentMode;adjustmentMode();
   $("#adjust-form").onsubmit = (e) => {
     e.preventDefault();
     action(async () => {
@@ -875,6 +891,7 @@ document.addEventListener("click", (e) => {
     if (a === "edit") expenseForm(b.dataset.id);
     if (a === "adjust") adjustForm();
     if (a === "reserve") reservations();
+    if (a === "close-trip") closeTripForm();
     if (a === "import") importFile();
     if (a === "export")
       await exportFile(
@@ -1065,3 +1082,11 @@ function recentTransactions(t) {
 }
 setInterval(()=>{if(state && !document.hidden && !$("#dialog").open && today()!==renderedDate)render();},30000);
 $("#dialog").addEventListener("close",()=>{if(state && today()!==renderedDate)render();});
+
+function closeTripForm() {
+ const t=trip(), next=structuredClone(state), tr=next.trips.find(x=>x.id===t.id);
+ closeTrip(next,tr,today(),"Preview");
+ const released=allocation(t)-allocation(tr);
+ modal(`<h2>Close ${esc(t.name)}?</h2><p class="small">Release ${money(released)} of unused allocation to your shared fund. Actual money remains ${money(fundStats(state).actual,state.fund.currency)}. Every expense, payment and history entry is retained. No unpaid commitment or pending refund can be skipped.</p><form id="close-trip-form">${field("close-reason","Reason","Trip finished","text",'required maxlength="800"')}${footer("Close & release unused allocation")}</form>`);
+ $("#close-trip-form").onsubmit=e=>{e.preventDefault();action(async()=>{await change(n=>closeTrip(n,n.trips.find(x=>x.id===t.id),today(),$("#close-reason").value.trim()));close();toast("Trip closed. Cash unchanged; unused allocation released.");});};
+}

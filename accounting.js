@@ -101,7 +101,7 @@ export function safeSummary(s, t, date) {
     end = dayNumber(t.end),
     now = dayNumber(date),
     day = Math.max(start, Math.min(now, end)),
-    days = now > end ? 0 : end - day + 1;
+    days = t.closed || now > end ? 0 : end - day + 1;
   const paidToday = sum(
     t.transactions
       .filter((x) => x.pool === "daily" && dayNumber(x.date) === day)
@@ -118,7 +118,7 @@ export function safeSummary(s, t, date) {
       shortfall: 0,
       original: t.originalTarget,
       status:
-        now < start ? "Upcoming" : now > end ? "Completed" : "In progress",
+        t.closed ? "Closed" : now < start ? "Upcoming" : now > end ? "Completed" : "In progress",
       spent: paidToday,
       needsSetup: true,
     };
@@ -155,7 +155,7 @@ export function safeSummary(s, t, date) {
     available,
     shortfall: Math.max(0, -raw),
     original: t.originalTarget,
-    status: now < start ? "Upcoming" : now > end ? "Completed" : "In progress",
+    status: t.closed ? "Closed" : now < start ? "Upcoming" : now > end ? "Completed" : "In progress",
     spent: paidToday,
     needsSetup: false,
   };
@@ -362,6 +362,7 @@ export function addBooking(
     name,
     pool,
     total,
+    serviceDate: date,
     cancelled: false,
     fee: 0,
     changes: [
@@ -530,6 +531,8 @@ export function validateState(s) {
       fail("Invalid reconciliation.");
   }
   for (const t of s.trips) {
+    if (t.dateCertainty !== undefined && !["estimated","confirmed"].includes(t.dateCertainty)) fail("Invalid trip date certainty.");
+    if (t.closed !== undefined && typeof t.closed !== "boolean") fail("Invalid closed trip flag.");
     if (
       typeof t.included !== "boolean" ||
       (t.included && s.fund.initialized && !rate(t.fundRate)) ||
@@ -723,4 +726,15 @@ export function saveExpense(t, record, oldId, asOf = dateInZone(t.zone)) {
     t.changes.push({ id: uid(), date: asOf, type: "expense edit", before: structuredClone(old), after: structuredClone(record) });
     t.transactions[t.transactions.indexOf(old)] = record;
   } else t.transactions.push(record);
+}
+
+export function closeTrip(s, t, date, note) {
+ if (!t.included || t.closed || !text(note)) fail("Choose an open live trip and enter a reason.");
+ dayNumber(date);
+ if (POOLS.some(p=>commitment(t,p)>0) || t.bookings.some(b=>bookingStatus(t,b).pendingRefund>0)) fail("Resolve unpaid commitments and pending refunds before closing this trip.");
+ const before=allocation(t), cash=fundStats(s).actual;
+ for(const p of POOLS) { const free=Math.max(0,poolBudget(t,p)-spent(t,p)); if(free)adjustBudget(s,t,p,-free,date,"Trip closed: "+note); }
+ t.closed=true;
+ t.changes.push({id:uid(),date,type:"trip closed",note,released:before-allocation(t)});
+ if(fundStats(s).actual!==cash) fail("Closing cannot change actual cash.");
 }

@@ -35,6 +35,12 @@ export async function write(data, expected) {
         tx.abort();
         return;
       }
+      if (
+        get.result &&
+        get.result.schemaVersion !== 2 &&
+        data.schemaVersion === 2
+      )
+        s.put(get.result, "pre-accounting-v1");
       s.put({ ...data, revision: expected + 1 }, "data");
     };
     tx.oncomplete = () => {
@@ -52,5 +58,16 @@ export async function write(data, expected) {
       );
     };
     tx.onerror = () => {};
+  });
+}
+
+export async function readLegacyRecovery() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("state");
+    const r = tx.objectStore("state").get("pre-accounting-v1");
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+    tx.oncomplete = () => db.close();
   });
 }

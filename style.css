@@ -456,3 +456,103 @@ form .grid {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+.fund-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #edf2e4;
+}
+.fund-card .eyebrow {
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+.fund-card button {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 10px;
+  min-height: 44px;
+}
+.fund-amount {
+  font-size: 25px;
+  display: block;
+  margin: 6px 0;
+}
+.hero-note {
+  color: #dceacb;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 18px 0 0;
+}
+.booking-card {
+  display: block;
+  text-align: left;
+  width: 100%;
+  background: white;
+  color: #174b43;
+  border: 1px solid #dce4d6;
+  margin: 10px 0;
+  padding: 18px;
+}
+.booking-card .small {
+  margin-top: 10px;
+}
+.check-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.check-label input {
+  width: 22px;
+  min-height: 22px;
+}
+details {
+  margin-top: 20px;
+}
+summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+.fund-card p {
+  margin-bottom: 0;
+}
+@media (max-width: 370px) {
+  .fund-amount {
+    font-size: 21px;
+  }
+  .fund-card {
+    align-items: flex-start;
+  }
+  .fund-card button {
+    max-width: 100px;
+  }
+}
+.fund-card > div {
+  min-width: 0;
+}
+.fund-amount,
+.eyebrow {
+  overflow-wrap: anywhere;
+}
+.activity {
+  overflow-wrap: anywhere;
+}
+.grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.grid > div {
+  min-width: 0;
+}
+input,
+select,
+textarea {
+  min-width: 0;
+}
+@media (max-width: 420px) {
+  #trip-form .grid {
+    grid-template-columns: 1fr;
+  }
+}

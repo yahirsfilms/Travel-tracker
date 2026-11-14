@@ -3,6 +3,10 @@ travel budget tracker
 
 ## Roam V1 — offline travel budget
 
+**Local accounting review build:** see [ACCOUNTING.md](ACCOUNTING.md) for the authoritative shared-fund model, safe spending, booking/refund lifecycle, reconciliation, migration, and recovery rules. Corrections are not yet pushed or deployed.
+
+The original V1 behavior below is retained as implementation history; its independent daily-pool formula is superseded in the app by the shared-fund calculation.
+
 A free, buildless Progressive Web App for personal travel budgeting. All application assets are local; there are no runtime packages, remote fonts, analytics, accounts, exchange-rate services, or financial uploads. GitHub Pages hosts code only. Personal records stay in IndexedDB on the device. JSON/CSV exports leave the app only when you explicitly save or share them.
 
 ### Features
@@ -34,7 +38,7 @@ The next-day projection assumes no more spending today. Overspending and undersp
 
 In Trip, choose **Export all trips · JSON**, then **Save to Files** in the share sheet. If sharing files is unsupported, the app offers a download. The export timestamp means the export/share operation completed; it cannot guarantee you retained the file. Open Files and verify it is there.
 
-To recover, choose **Restore backup**, select the JSON file, review trip and expense counts, and confirm. Restoration adds copies of all trips and never replaces existing records. Repeated imports therefore create repeated copies. JSON preserves all trip details, transactions, rates, adjustments and reservations. CSV is for spreadsheets and cannot restore the app. Backups are plain text: keep them somewhere private. Backup imports have a 20 MB size limit.
+To recover, choose **Restore backup**, select the JSON file, review trip and expense counts, and confirm. Restoration adds copies of all trips and never replaces existing records. Repeated imports therefore create repeated copies. Current JSON also preserves the shared fund, booking links, reconciliation and change history. See ACCOUNTING.md for complete versus reference recovery. CSV is for spreadsheets and cannot restore the app. Backups are plain text: keep them somewhere private. Backup imports have a 20 MB size limit.
 
 ### Run and test
 

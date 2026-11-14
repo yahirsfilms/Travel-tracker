@@ -87,6 +87,7 @@ export function validate(data) {
       !t ||
       typeof t.id !== "string" ||
       ids.has(t.id) ||
+      typeof t.zone !== "string" ||
       typeof t.name !== "string" ||
       !t.name.trim() ||
       t.name.length > 100 ||
@@ -149,8 +150,6 @@ export function validate(data) {
         typeof r.category !== "string" ||
         typeof r.note !== "string" ||
         r.note.length > 1000 ||
-        r.date < t.start ||
-        r.date > t.end ||
         r.base !== convert(r.amount, r.rate) ||
         (r.currency === t.currency && r.rate !== 1)
       )

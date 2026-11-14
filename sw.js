@@ -1,10 +1,11 @@
-const CACHE = "roam-shell-v1.0.5";
+const CACHE = "roam-shell-v1.1.3-accounting";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
   "./core.js",
+  "./accounting.js",
   "./db.js",
   "./manifest.webmanifest",
   "./icon.svg",

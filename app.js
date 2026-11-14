@@ -31,6 +31,8 @@ import {
   makeBackup,
   parseBackup,
   restoreBackup,
+  correctBookingTransaction,
+  saveExpense,
 } from "./accounting.js";
 const $ = (s) => document.querySelector(s),
   esc = (s) =>
@@ -313,7 +315,7 @@ function bookingForm(id) {
               "",
             )}</select></div>${field("booking-amount", "Amount / new total / final cancellation cost in " + t.currency, "", "number", 'required min="0" step="0.01" inputmode="decimal"')}<div id="booking-fx"><label for="booking-currency">Payment / refund currency</label><select id="booking-currency">${options(currencies, t.currency)}</select>${field("booking-rate", "1 payment currency in " + t.currency, 1, "number", 'required min="0.000001" max="1000000" step="any" inputmode="decimal"')}<p class="small" id="booking-conversion"></p></div>${dateField("booking-action-date", "Payment, refund or change date", today())}${field("booking-note", "Reason or note", "", "text", 'required maxlength="800"')}${footer("Record action")}</form>`
         : '<button data-action="close" class="quiet">Close reference</button>'
-    }<details><summary>Booking history</summary>${b.changes.map((e) => `<p class="small">${esc(e.date)} · ${esc(e.type)} · ${esc(e.note || "")} · total ${money(e.total)}${e.fee ? " · final cost " + money(e.fee) : ""}</p>`).join("")}${t.transactions
+    }${t.included ? `<details><summary>Correct a payment or refund</summary><p class="small">Fix an entry mistake without claiming a new cash receipt. Earlier values remain in history.</p>${t.transactions.filter(x => x.bookingId === b.id).map(x => `<button class="link" data-action="correct-booking" data-id="${esc(x.id)}">Correct ${esc(x.date)} · ${money(x.base)}</button>`).join("")}</details>` : ""}<details><summary>Booking history</summary>${b.changes.map((e) => `<p class="small">${esc(e.date)} · ${esc(e.type)} · ${esc(e.note || "")} · total ${money(e.total)}${e.fee ? " · final cost " + money(e.fee) : ""}</p>`).join("")}${t.transactions
       .filter((x) => x.bookingId === b.id)
       .map(
         (x) =>
@@ -582,9 +584,13 @@ function expenseForm(id) {
     old = t.transactions.find((x) => x.id === id),
     defDate = today();
   modal(
-    `<h2>${old ? "Edit expense" : "A little stop along the way."}</h2><form id="expense-form"><div class="grid"><div>${field("amount", "Amount", old ? Math.abs(old.amount) / 100 : "", "number", 'required min="0.01" step="0.01" inputmode="decimal" autofocus')}</div><div><label for="expense-currency">Currency</label><select id="expense-currency">${options(currencies, old?.currency || t.expenseCurrency || t.currency)}</select></div></div><label for="kind">Record type</label><select id="kind"><option value="expense">Expense</option><option value="refund" ${old?.amount < 0 ? "selected" : ""}>Refund · returns money to this pool</option></select><div class="grid"><div><label for="category">Category</label><select id="category">${options(["Food & drink", "Activities", "Shopping", "Hotel", "Transportation", "Emergency", "Other"], old?.category || "Food & drink")}</select></div><div><label for="pool">Budget pool</label><select id="pool">${options(POOLS, old?.pool || "daily")}</select></div></div>${dateField("date", "Date", old?.date || defDate)}${field("rate", `1 expense currency = how many ${t.currency}?`, old?.rate || t.rates?.[t.expenseCurrency] || 1, "number", 'required min="0.000001" max="1000000" step="any" inputmode="decimal"')}<p class="small" id="conversion"></p>${field("note", "Note · optional", old?.note || "", "text", 'maxlength="1000" placeholder="Noodles near the station"')}${footer(old ? "Save changes" : "Save expense")}${old ? '<button type="button" class="danger" style="width:100%;margin-top:12px" data-action="delete-expense" data-id="' + esc(id) + '">Delete expense</button>' : ""}</form>`,
+    `<h2>${old ? "Edit expense" : "A little stop along the way."}</h2><form id="expense-form"><div class="grid"><div>${field("amount", "Amount", old ? Math.abs(old.amount) / 100 : "", "number", 'required min="0.01" step="0.01" inputmode="decimal" autofocus')}</div><div><label for="expense-currency">Currency</label><select id="expense-currency">${options(currencies, old?.currency || t.expenseCurrency || t.currency)}</select></div></div><label for="kind">Record type</label><select id="kind"><option value="expense">Expense</option><option value="refund" ${old?.amount < 0 ? "selected" : ""}>Refund · returns money to this pool</option></select><div class="grid"><div><label for="category">Category</label><select id="category">${options(["Food & drink", "Activities", "Shopping", "Hotel", "Transportation", "Emergency", "Other"], old?.category || "Food & drink")}</select></div><div><label for="pool">Budget pool</label><select id="pool">${options(POOLS, old?.pool || "daily")}</select></div></div><div id="booking-suggestion" hidden><label for="expense-booking">Pay an existing booking?</label><select id="expense-booking"><option value="">Separate purchase · not a booking payment</option>${t.bookings.filter(b => !b.cancelled).map(b => `<option value="${esc(b.id)}" data-pool="${b.pool}">${esc(b.name)} · ${money(bookingStatus(t,b).unpaid)} unpaid</option>`).join("")}</select><p class="small">Choose the booking to reduce its unpaid balance exactly once.</p></div><div id="refund-options" hidden><label for="refund-original">Original expense</label><select id="refund-original"><option value="">Choose original expense</option>${t.transactions.filter(x => x.base > 0 && !x.bookingId && x.id !== id).map(x => `<option value="${esc(x.id)}" ${old?.refundOf === x.id ? "selected" : ""}>${esc(x.date)} · ${esc(x.category)} · ${money(x.base)}</option>`).join("")}</select><label class="check-label"><input id="unmatched-credit" type="checkbox" ${old?.unmatchedCredit ? "checked" : ""}>This is an unmatched credit I have actually received</label><p class="small">Pending refunds are not money received. Confirm the cash change before saving.</p></div>${dateField("date", "Date", old?.date || defDate)}${field("rate", `1 expense currency = how many ${t.currency}?`, old?.rate || t.rates?.[t.expenseCurrency] || 1, "number", 'required min="0.000001" max="1000000" step="any" inputmode="decimal"')}<p class="small" id="conversion"></p>${field("note", "Note · optional", old?.note || "", "text", 'maxlength="1000" placeholder="Noodles near the station"')}${footer(old ? "Save changes" : "Save expense")}${old ? '<button type="button" class="danger" style="width:100%;margin-top:12px" data-action="delete-expense" data-id="' + esc(id) + '">Delete expense</button>' : ""}</form>`,
   );
   const update = () => {
+    const isRefund = $("#kind").value === "refund";
+    $("#refund-options").hidden = !isRefund;
+    $("#booking-suggestion").hidden = isRefund || !!old || !["hotels", "transport"].includes($("#pool").value);
+    for (const option of $("#expense-booking").options) option.hidden = !!option.dataset.pool && option.dataset.pool !== $("#pool").value;
     const c = $("#expense-currency").value;
     $("#rate").disabled = c === t.currency;
     if (c === t.currency) $("#rate").value = 1;
@@ -607,11 +613,20 @@ function expenseForm(id) {
   };
   $("#amount").oninput = update;
   $("#rate").oninput = update;
+  $("#kind").onchange = update;
+  $("#pool").onchange = () => { $("#expense-booking").value = ""; update(); };
+  $("#refund-original").onchange = () => {
+    const original = t.transactions.find(x => x.id === $("#refund-original").value);
+    if (original) $("#pool").value = original.pool;
+    update();
+  };
   $("#category").onchange = () => {
     $("#pool").value =
       { Hotel: "hotels", Transportation: "transport", Emergency: "emergency" }[
         $("#category").value
       ] || "daily";
+    $("#expense-booking").value = "";
+    update();
   };
   update();
   $("#expense-form").onsubmit = async (e) => {
@@ -635,21 +650,15 @@ function expenseForm(id) {
         pool: $("#pool").value,
         category: $("#category").value,
         note: $("#note").value.trim(),
+        ...($("#kind").value === "refund" ? { refundOf: $("#refund-original").value || undefined, unmatchedCredit: $("#unmatched-credit").checked } : {}),
       };
       await change((n) => {
         const tr = n.trips.find((x) => x.id === t.id);
-        if (old)
-          tr.changes.push({
-            id: uid(),
-            date: today(),
-            type: "expense edit",
-            before: structuredClone(old),
-            after: structuredClone(record),
-          });
-        if (old)
-          tr.transactions[tr.transactions.findIndex((x) => x.id === old.id)] =
-            record;
-        else tr.transactions.push(record);
+        const booking = tr.bookings.find(b => b.id === $("#expense-booking").value);
+        if (booking && $("#kind").value === "expense" && !old) {
+          if (booking.pool !== record.pool) throw Error("Choose a booking from this budget.");
+          bookingTransaction(tr, booking, { ...record, asOf: today() });
+        } else saveExpense(tr, record, old?.id, today());
         tr.rates = { ...tr.rates, [currency]: rate };
         tr.expenseCurrency = currency;
       });
@@ -747,6 +756,7 @@ function importFile() {
   );
   $("#backup-file").onchange = () =>
     action(async () => {
+      $("#import-preview").replaceChildren();
       const f = $("#backup-file").files[0];
       if (!f) return;
       if (f.size > 20e6) throw Error("Backup exceeds 20 MB.");
@@ -808,6 +818,7 @@ document.addEventListener("click", (e) => {
     if (a === "fund") fundForm();
     if (a === "bookings") bookingForm();
     if (a === "booking") bookingForm(b.dataset.id);
+    if (a === "correct-booking") correctionForm(b.dataset.id);
     if (a === "legacy-export") {
       const original = await readLegacyRecovery();
       if (!original)
@@ -843,6 +854,7 @@ document.addEventListener("click", (e) => {
       if (!trip().included) throw Error("Reference copies are read-only.");
       const t = trip(),
         record = t.transactions.find((x) => x.id === b.dataset.id);
+      if (t.transactions.some(x => x.refundOf === record.id)) throw Error("Correct linked refunds before deleting their original expense.");
       modal(
         `<h2>Delete this expense?</h2><p>${esc(record.category)} · ${money(record.base)}</p><p class="small">The pool balance and future allowances will be recalculated.</p><div class="actions"><button data-action="close" class="quiet">Keep expense</button><button id="confirm-delete" class="danger">Delete</button></div>`,
       );
@@ -977,4 +989,13 @@ try {
       $("#main").append(recovery);
     }
   }
+}
+
+function correctionForm(id) {
+ const t=trip(), x=t.transactions.find(x=>x.id===id), b=t.bookings.find(b=>b.id===x?.bookingId);
+ if (!b || !t.included) throw Error("Choose a live booking payment.");
+ modal(`<h2>Correct recorded ${x.base < 0 ? "refund" : "payment"}</h2><p class="small">Earlier ${esc(x.date)} · ${money(x.base)}. This corrects your records; it is not another payment or refund.</p><form id="correction-form">${field("correction-amount","Correct amount in " + x.currency,Math.abs(x.amount)/100,"number",'required min="0.01" step="0.01" inputmode="decimal"')}${field("correction-rate","1 " + x.currency + " in " + t.currency,x.rate,"number",'required min="0.000001" step="any"')}${dateField("correction-date","Correct payment date",x.date)}${field("correction-note","Reason for correction","","text",'required maxlength="800"')}<p id="correction-preview" class="notice"></p>${footer("Save correction")}</form>`);
+ const preview=()=> { try { const next=structuredClone(state),tr=next.trips.find(a=>a.id===t.id),bk=tr.bookings.find(a=>a.id===b.id);correctBookingTransaction(tr,bk,id,{amount:cents($("#correction-amount").value),currency:x.currency,rate:Number($("#correction-rate").value),date:$("#correction-date").value,note:$("#correction-note").value||"Preview",asOf:today()});$("#correction-preview").textContent="Actual money: " + money(fundStats(state).actual,state.fund.currency) + " → " + money(fundStats(next).actual,state.fund.currency)+" · Booking unpaid: " + money(bookingStatus(tr,bk).unpaid); } catch(e){$("#correction-preview").textContent=e.message;} };
+ $("#correction-form").oninput=preview;preview();
+ $("#correction-form").onsubmit=e=>{e.preventDefault();action(async()=>{await change(n=>{const tr=n.trips.find(a=>a.id===t.id);correctBookingTransaction(tr,tr.bookings.find(a=>a.id===b.id),id,{amount:cents($("#correction-amount").value),currency:x.currency,rate:Number($("#correction-rate").value),date:$("#correction-date").value,note:$("#correction-note").value.trim(),asOf:today()});});close();toast("Correction saved. Earlier values retained in history.");});};
 }

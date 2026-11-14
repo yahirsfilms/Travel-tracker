@@ -678,3 +678,46 @@ export function restoreBackup(s, data, mode = "copies") {
   validateState(s);
   return s;
 }
+
+// Corrections retain the earlier record in the audit history; they are not cash receipts.
+export function correctBookingTransaction(t, b, id, { amount, currency, rate: fx, date, note, asOf = dateInZone(t.zone) }) {
+  const index = t.transactions.findIndex(x => x.id === id && x.bookingId === b.id);
+  if (index < 0 || !text(note) || !integer(amount) || amount <= 0 || !CURRENCIES.includes(currency) || !rate(fx) || (currency === t.currency && fx !== 1)) fail("Enter a valid correction and reason.");
+  dayNumber(date);
+  if (date > asOf) fail("A correction cannot record a future payment.");
+  const before = structuredClone(t.transactions[index]), previous = bookingStatus(t, b);
+  const base = convert(amount, fx) * Math.sign(before.base);
+  if (!base) fail("The correction rounds to zero.");
+  const after = { ...before, date, currency, rate: fx, amount: amount * Math.sign(before.amount), base, note: before.note };
+  t.transactions[index] = after;
+  const st = bookingStatus(t, b);
+  if (st.refunded > st.paid || st.net > Math.max(previous.net, st.liability)) {
+    t.transactions[index] = before;
+    fail("Correction exceeds the bill or leaves refunds above payments. Review related records first.");
+  }
+  t.changes.push({ id: uid(), date: asOf, type: "booking payment corrected", bookingId: b.id, note, before, after: structuredClone(after) });
+}
+
+export function saveExpense(t, record, oldId, asOf = dateInZone(t.zone)) {
+  if (!t.included) fail("Reference copies are read-only.");
+  dayNumber(record.date);
+  if (record.date > asOf || !integer(record.amount) || !record.amount || !record.base || record.base !== convert(record.amount, record.rate)) fail("Enter a nonzero payment already paid or received.");
+  const old = t.transactions.find(x => x.id === oldId);
+  if (old?.bookingId) fail("Correct linked payments from their booking.");
+  if (record.base < 0) {
+    const original = t.transactions.find(x => x.id === record.refundOf && x.base > 0 && !x.bookingId);
+    // Existing unmatched refunds remain editable; new unmatched credits need explicit acknowledgment.
+    if (!original && !record.unmatchedCredit && !(old?.base < 0 && !old.refundOf)) fail("Choose the original expense, or confirm an unmatched received credit.");
+    if (original) {
+      if (record.pool !== original.pool) fail("Refunds must return to the original budget.");
+      const already = -sum(t.transactions.filter(x => x.refundOf === original.id && x.id !== oldId).map(x => x.base));
+      if (-record.base + already > original.base) fail("Refund exceeds the original expense remaining to be refunded.");
+    }
+  }
+  const refunds = old ? -sum(t.transactions.filter(x => x.refundOf === oldId).map(x => x.base)) : 0;
+  if (refunds && (record.base < refunds || record.pool !== old.pool || record.base <= 0)) fail("Correct the linked refunds before reducing or moving this expense.");
+  if (old) {
+    t.changes.push({ id: uid(), date: asOf, type: "expense edit", before: structuredClone(old), after: structuredClone(record) });
+    t.transactions[t.transactions.indexOf(old)] = record;
+  } else t.transactions.push(record);
+}

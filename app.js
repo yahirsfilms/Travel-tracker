@@ -70,6 +70,7 @@ let state,
   pending = null,
   busy = false;
 let bootComplete = false;
+let renderedDate = "";
 const trip = () => state?.trips.find((t) => t.id === state.active),
   money = (n, c = trip()?.currency || "USD") =>
     new Intl.NumberFormat("en-US", {
@@ -440,6 +441,7 @@ function bookingForm(id) {
 }
 
 function render() {
+  renderedDate = today();
   applyAppearance(state.settings?.appearance || "system");
   status();
   document
@@ -458,8 +460,7 @@ function render() {
   const date = today(),
     s = safeSummary(state, t, date);
   if (tab === "today") {
-    $("#main").innerHTML =
-      `${fundCard()}<div class="row"><div class="eyebrow">${esc(t.name)}</div><span class="pill">${s.status}</span></div><h1>${s.status === "Completed" ? "A trip to remember." : s.status === "Upcoming" ? "Adventure ahead." : "Enjoy the journey."}</h1><p class="sub">${esc(date)} · ${s.status === "Completed" ? "Trip summary" : s.days + " days " + (s.status === "Upcoming" ? "in your trip" : "including today")}</p><div class="hero"><div class="eyebrow">${s.status === "Completed" ? "Trip complete" : s.status === "Upcoming" ? "First-day safe allowance" : "Safe to spend today"}</div><div class="amount ${s.remaining < 0 ? "negative" : ""}">${money(s.safeToday)}</div><div class="row"><div><div class="small" style="color:#c0d3c4">Adjusted allowance</div><strong>${money(s.allowance)}</strong></div><div><div class="small" style="color:#c0d3c4">Spent ${s.status === "Upcoming" ? "on first day" : "today"}</div><strong>${money(s.spent)}</strong></div></div><p class="hero-note">Original target ${money(s.original)} / day · ${s.remaining < 0 ? money(-s.remaining) + " over today’s allowance" : ""}</p></div><div class="row small"><span>${s.needsSetup ? "Projection unavailable" : s.tomorrow === null ? "No remaining travel days to redistribute" : s.status === "Upcoming" ? "Next travel day’s projection" : "Next day’s projected allowance"}</span><strong>${s.tomorrow === null ? "" : money(s.tomorrow)}</strong></div>${s.needsSetup ? `<div class="notice">${t.included ? "Set up your actual travel fund to calculate safe spending." : "Reference copy: records are preserved but excluded from live money."}</div>` : ""}${s.shortfall ? `<div class="notice negative">Funding shortfall: ${money(s.shortfall)}. No extra money has been assumed.</div>` : ""}<button class="primary" data-action="expense">＋ Add expense</button><div class="row"><h2>Your other budgets</h2><button class="link" data-tab="trip">View all →</button></div><div class="grid">${["hotels", "transport", "emergency"].map((p) => `<div class="card"><div class="small">${poolIcon(p)} ${names[p]}</div><div class="metric ${balance(t, p) < 0 ? "negative" : ""}">${money(balance(t, p))}</div><div class="small">budget left${commitment(t, p) ? " · " + money(commitment(t, p)) + " owed" : ""}</div></div>`).join("")}</div><div class="section"><h2>Recent expenses</h2>${entries([...t.transactions].reverse().slice(0, 4))}</div>`;
+    $("#main").innerHTML = `${fundCard()}<div class="row"><h1>${esc(t.name)}</h1><span class="pill">${s.status}${t.dateCertainty === "estimated" ? " · Estimated" : ""}</span></div><p class="sub">${esc(date)} · ${s.days} travel days remaining · ${esc(t.zone)}</p><section class="hero"><div class="eyebrow">${s.status === "Completed" ? "Trip complete" : s.status === "Upcoming" ? "Projected first-day allowance" : "Left to spend today"}</div><div class="amount">${money(s.safeToday)}</div><div class="row"><div><div class="small">${s.status === "Upcoming"?"First-day":"Today's"} allowance</div><strong>${money(s.allowance)}</strong></div><div><div class="small">${s.status === "Upcoming"?"Spent on first day":"Spent today"}</div><strong>${money(s.spent)}</strong></div></div></section>${s.remaining < 0 ? `<div class="notice negative">${money(-s.remaining)} over today's allowance. ${s.tomorrow !== null ? "Next day's allowance is " + money(s.tomorrow) + ". The remaining daily budget is spread across " + (s.days-1) + " days." : "No travel days remain to redistribute this overrun."}</div>` : ""}<div class="row small"><span>Original daily target</span><strong>${money(s.original)}</strong></div><div class="row small projection"><span>${s.status === "Upcoming" ? "Second travel day" : "Tomorrow"}</span><strong>${s.tomorrow === null ? "No remaining days" : money(s.tomorrow)}</strong></div>${s.tomorrow !== null ? '<p class="small projection-note">Projection assumes no more spending today.</p>' : ""}${s.needsSetup ? `<div class="notice">${t.included ? "Set up actual funds to calculate safe spending." : "Read-only reference · excluded from live money."}</div>` : ""}${s.shortfall ? `<div class="notice negative">Funding shortfall ${money(s.shortfall)}. Review allocations or compare your actual balance.</div>` : ""}<button class="primary" data-action="expense" ${!t.included?'disabled':''}>＋ Add expense</button><div class="row"><h2>Protected budgets</h2><button class="link" data-tab="trip">Details</button></div><div class="pool-strip">${["hotels","transport","emergency"].map(p=>`<div class="card"><div class="small">${p==="transport"?"Transport":names[p]}</div><strong class="${balance(t,p)<0?'negative':''}">${money(balance(t,p))}</strong>${commitment(t,p)?`<div class="small">${money(commitment(t,p))} unpaid</div>`:''}</div>`).join('')}</div>${state.backupNeeded ? '<button class="backup-reminder link" data-tab="settings">Changes need a fresh backup →</button>' : ""}<section class="section"><div class="row"><h2>Recent activity</h2><button class="link" data-tab="history">See all</button></div>${entries(recentTransactions(t).slice(0,4))}</section>`;
   } else if (tab === "history") {
     $("#main").innerHTML =
       `<div class="eyebrow">${esc(t.name)}</div><div class="row"><h1>Your travel trail.</h1><button data-action="expense">＋ Add</button></div><p class="sub">Every little stop, all in one place.</p><div class="toolbar"><input id="search" aria-label="Search expenses" placeholder="Search expenses" value="${esc(query)}"><select id="pool-filter" aria-label="Filter budget pool"><option value="">All budgets</option>${options(POOLS, filter)}</select></div><div id="entries"></div>`;
@@ -504,16 +505,14 @@ function render() {
   }
 }
 function renderEntries() {
-  const list = trip()
-    .transactions.filter(
+  const list = recentTransactions(trip()).filter(
       (t) =>
         (!filter || t.pool === filter) &&
         `${t.note} ${t.category} ${t.date}`
           .toLowerCase()
           .includes(query.toLowerCase()),
     )
-    .slice()
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .slice();
   $("#entries").innerHTML = entries(list);
 }
 function tripForm(edit = false) {
@@ -611,19 +610,22 @@ function expenseForm(id) {
   const t = trip(),
     old = t.transactions.find((x) => x.id === id),
     defDate = today();
-  modal(
-    `<h2>${old ? "Edit expense" : "A little stop along the way."}</h2><form id="expense-form" data-draft-key="expense-${esc(id || 'new')}"><div class="grid"><div>${field("amount", "Amount", old ? Math.abs(old.amount) / 100 : "", "number", 'required min="0.01" step="0.01" inputmode="decimal" autofocus')}</div><div><label for="expense-currency">Currency</label><select id="expense-currency">${options(currencies, old?.currency || t.expenseCurrency || t.currency)}</select></div></div><label for="kind">Record type</label><select id="kind"><option value="expense">Expense</option><option value="refund" ${old?.amount < 0 ? "selected" : ""}>Refund · returns money to this pool</option></select><div class="grid"><div><label for="category">Category</label><select id="category">${options(["Food & drink", "Activities", "Shopping", "Hotel", "Transportation", "Emergency", "Other"], old?.category || "Food & drink")}</select></div><div><label for="pool">Budget pool</label><select id="pool">${options(POOLS, old?.pool || "daily")}</select></div></div><div id="booking-suggestion" hidden><label for="expense-booking">Pay an existing booking?</label><select id="expense-booking"><option value="">Separate purchase · not a booking payment</option>${t.bookings.filter(b => !b.cancelled).map(b => `<option value="${esc(b.id)}" data-pool="${b.pool}">${esc(b.name)} · ${money(bookingStatus(t,b).unpaid)} unpaid</option>`).join("")}</select><p class="small">Choose the booking to reduce its unpaid balance exactly once.</p></div><div id="refund-options" hidden><label for="refund-original">Original expense</label><select id="refund-original"><option value="">Choose original expense</option>${t.transactions.filter(x => x.base > 0 && !x.bookingId && x.id !== id).map(x => `<option value="${esc(x.id)}" ${old?.refundOf === x.id ? "selected" : ""}>${esc(x.date)} · ${esc(x.category)} · ${money(x.base)}</option>`).join("")}</select><label class="check-label"><input id="unmatched-credit" type="checkbox" ${old?.unmatchedCredit ? "checked" : ""}>This is an unmatched credit I have actually received</label><p class="small">Pending refunds are not money received. Confirm the cash change before saving.</p></div>${dateField("date", "Date", old?.date || defDate)}${field("rate", `1 expense currency = how many ${t.currency}?`, old?.rate || t.rates?.[t.expenseCurrency] || 1, "number", 'required min="0.000001" max="1000000" step="any" inputmode="decimal"')}<p class="small" id="conversion"></p>${field("note", "Note · optional", old?.note || "", "text", 'maxlength="1000" placeholder="Noodles near the station"')}${footer(old ? "Save changes" : "Save expense")}${old ? '<button type="button" class="danger" style="width:100%;margin-top:12px" data-action="delete-expense" data-id="' + esc(id) + '">Delete expense</button>' : ""}</form>`,
-  );
+  const initialCurrency = old?.currency || t.expenseCurrency || t.currency;
+  const initialRate = old?.rate ?? (initialCurrency === t.currency ? 1 : t.rates?.[initialCurrency] ?? "");
+  modal(`<h2>${old ? "Edit expense" : "Add expense"}</h2><form id="expense-form" data-draft-key="expense-${esc(id || 'new')}"><div class="grid"><div>${field("amount","Amount",old?Math.abs(old.amount)/100:"","number",'required min="0.01" step="0.01" inputmode="decimal" autofocus')}</div><div><label for="expense-currency">Currency</label><select id="expense-currency">${options(currencies,initialCurrency)}</select></div></div><p class="small" id="conversion"></p><label for="category">Category</label><select id="category">${options(["Food & drink","Activities","Shopping","Hotel","Transportation","Emergency","Other"],old?.category||"Food & drink")}</select><p class="small" id="expense-context"></p><div id="booking-suggestion" hidden><label for="expense-booking">Pay an existing booking?</label><select id="expense-booking"><option value="">Separate purchase · not a booking payment</option>${t.bookings.filter(b=>!b.cancelled).map(b=>`<option value="${esc(b.id)}" data-pool="${b.pool}">${esc(b.name)} · ${money(bookingStatus(t,b).unpaid)} unpaid</option>`).join('')}</select><p class="small">Choose the booking to reduce its unpaid balance exactly once.</p></div><details id="expense-advanced" ${old?.amount<0 || !initialRate ? 'open':''}><summary>Date, conversion, note & refund options</summary><label for="kind">Record type</label><select id="kind"><option value="expense">Expense</option><option value="refund" ${old?.amount<0?'selected':''}>Refund received</option></select><label for="pool">Budget pool</label><select id="pool">${options(POOLS,old?.pool||"daily")}</select><div id="refund-options" hidden><label for="refund-original">Original expense</label><select id="refund-original"><option value="">Choose original expense</option>${t.transactions.filter(x=>x.base>0&&!x.bookingId&&x.id!==id).map(x=>`<option value="${esc(x.id)}" ${old?.refundOf===x.id?'selected':''}>${esc(x.date)} · ${esc(x.category)} · ${money(x.base)}</option>`).join('')}</select><label class="check-label"><input id="unmatched-credit" type="checkbox" ${old?.unmatchedCredit?'checked':''}>This is an unmatched credit actually received</label><p class="small">Pending refunds do not increase your money.</p></div>${dateField("date","Date",old?.date||defDate)}${field("rate","1 expense currency in " + t.currency,initialRate,"number",'required min="0.000001" max="1000000" step="any" inputmode="decimal"')}${field("note","Note · optional",old?.note||"","text",'maxlength="1000"')}</details><div class="expense-save">${footer(old?"Save changes":"Save expense")}</div>${old?`<button type="button" class="danger" data-action="delete-expense" data-id="${esc(id)}">Delete expense</button>`:''}</form>`);
   const update = () => {
     const isRefund = $("#kind").value === "refund";
     $("#refund-options").hidden = !isRefund;
     $("#booking-suggestion").hidden = isRefund || !!old || !["hotels", "transport"].includes($("#pool").value);
     for (const option of $("#expense-booking").options) option.hidden = !!option.dataset.pool && option.dataset.pool !== $("#pool").value;
     const c = $("#expense-currency").value;
+    $("#amount").step = c === "JPY" ? "1" : "0.01";
+    $("#expense-context").textContent = names[$("#pool").value] + " · " + $("#date").value + (isRefund ? " · Received refund" : "");
+    if (!$("#rate").value) $("#expense-advanced").open = true;
     $("#rate").disabled = c === t.currency;
     if (c === t.currency) $("#rate").value = 1;
     $("#conversion").textContent =
-      "Planning amount: " +
+      (c === t.currency ? "Recorded amount: " : "Planning amount · " + ($("#rate").value || "rate required") + " " + t.currency + "/" + c + ": ") +
       money(
         Math.round(
           (Number($("#amount").value) || 0) *
@@ -642,6 +644,7 @@ function expenseForm(id) {
   $("#amount").oninput = update;
   $("#rate").oninput = update;
   $("#kind").onchange = update;
+  $("#date").onchange = update;
   $("#pool").onchange = () => { $("#expense-booking").value = ""; update(); };
   $("#refund-original").onchange = () => {
     const original = t.transactions.find(x => x.id === $("#refund-original").value);
@@ -834,6 +837,7 @@ document.addEventListener("click", (e) => {
   if (b.dataset.tab) {
     tab = b.dataset.tab;
     render();
+    window.scrollTo(0,0);
     return;
   }
   const a = b.dataset.action;
@@ -1055,3 +1059,9 @@ function renderMoney() {
  $("#main").innerHTML=`<h1>Shared travel money</h1>${fundCard()}<p class="small">Actual money includes received payments and refunds. Allocations are plans; pending refunds are excluded.</p><section class="card"><h2>Remaining trip allocations</h2>${state.trips.filter(t=>t.included).map(t=>`<div class="entry row"><strong>${esc(t.name)}</strong><span>${money(allocation(t)-spent(t),t.currency)}</span></div>`).join("")}<p class="small">${money(Math.max(0,f.unallocated),c)} unallocated${f.shortfall?" · "+money(f.shortfall,c)+" funding shortfall":""}. Unpaid costs beyond a trip's allocation are protected too.</p></section><button data-action="fund">Compare actual balance / record money</button>`;
 }
 $(".brand").addEventListener("click",e=>{e.preventDefault();tab="today";render();window.scrollTo(0,0);});
+
+function recentTransactions(t) {
+ return t.transactions.map((record,index)=>({record,index})).sort((a,b)=>b.record.date.localeCompare(a.record.date)||b.index-a.index).map(x=>x.record);
+}
+setInterval(()=>{if(state && !document.hidden && !$("#dialog").open && today()!==renderedDate)render();},30000);
+$("#dialog").addEventListener("close",()=>{if(state && today()!==renderedDate)render();});

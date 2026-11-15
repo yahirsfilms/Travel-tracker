@@ -65,4 +65,12 @@ test("service worker installs complete shell, serves offline navigation and asse
   assert.equal(await request("history"), "cached:./index.html");
   assert.equal(await request("app.js", "cors"), "cached:./app.js");
   assert.equal(await request("style.css?v=2", "cors"), "cached:./style.css");
+  let readiness;
+  handlers.message({data:{type:"CHECK_OFFLINE"},ports:[{postMessage: x => readiness=x}],waitUntil:p=>promise=p});
+  await promise;
+  assert.equal(readiness.ready,true);
+  stored.delete(new URL("app.js",scope).href);
+  handlers.message({data:{type:"CHECK_OFFLINE"},ports:[{postMessage: x => readiness=x}],waitUntil:p=>promise=p});
+  await promise;
+  assert.equal(readiness.ready,false);
 });

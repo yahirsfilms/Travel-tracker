@@ -8,6 +8,7 @@ import {
   balance,
   backup,
   csv,
+  backupFingerprint,
 } from "./core.js";
 import { read, write, readLegacyRecovery } from "./db.js";
 import {
@@ -88,13 +89,17 @@ function toast(s) {
   $("#toast").style.display = "block";
   setTimeout(() => ($("#toast").style.display = "none"), 5000);
 }
-const drafts = new Map();
+const draftStorageKey="roam-drafts:"+(new URLSearchParams(location.search).get("notebook")||"main");
+let drafts = new Map();
+try { drafts=new Map(JSON.parse(sessionStorage.getItem(draftStorageKey)||"[]")); } catch {}
+function persistDrafts(){try{sessionStorage.setItem(draftStorageKey,JSON.stringify([...drafts]));}catch{}}
+
 let modalKey = "";
 function rememberDraft() {
  const form = $("#dialog form");
  if (!form || !modalKey) return;
  const values = [...form.elements].filter(e=>e.id && e.type!=="file" && !["submit","button"].includes(e.type)).map(e=>({id:e.id,value:e.value,checked:e.checked}));
- if (form.dataset.dirty === "true") drafts.set(modalKey, values);
+ if (form.dataset.dirty === "true") {drafts.set(modalKey, values);persistDrafts();}
 }
 function modal(html) {
  rememberDraft();
@@ -108,13 +113,14 @@ function modal(html) {
    for (const v of saved) { const e=document.getElementById(v.id); if(e) {e.value=v.value;if(e.type==="checkbox")e.checked=v.checked;} }
    form.dataset.dirty="true";
  }
- if (form) form.addEventListener("input",()=>form.dataset.dirty="true");
+ if (form) {form.addEventListener("input",()=>{form.dataset.dirty="true";rememberDraft();});form.addEventListener("change",()=>{form.dataset.dirty="true";rememberDraft();});}
  const error=document.createElement("p");error.id="form-error";error.className="notice negative";error.setAttribute("role","alert");error.hidden=true;
+ if(form)form.setAttribute("aria-describedby","form-error");
  $("#dialog-content").prepend(error);
  if (!$("#dialog").open) $("#dialog").showModal();
 }
 const close = (saved = true) => {
- if (saved) drafts.delete(modalKey); else rememberDraft();
+ if (saved) {drafts.delete(modalKey);persistDrafts();} else rememberDraft();
  $("#dialog").close();
 };
 $("#dialog").addEventListener("cancel",e=>{e.preventDefault();close(false);});
@@ -152,7 +158,7 @@ async function change(fn) {
 }
 function status() {
   const el = $("#status");
-  el.textContent = `${navigator.onLine ? "● Online" : "● Offline"} · ${readyOffline ? "Ready offline" : "Offline setup pending"} · Saved on this device`;
+  el.textContent = `${new URLSearchParams(location.search).get("notebook") ? "Recovery notebook · " : ""}${navigator.onLine ? "● Online" : "● Offline"} · ${readyOffline ? "Ready offline" : "Offline setup pending"} · Saved on this device`;
   if (pending) {
     const b = document.createElement("button");
     b.className = "link";
@@ -330,9 +336,9 @@ function bookingForm(id) {
   }
   const st = bookingStatus(t, b);
   modal(
-    `<h2>${esc(b.name)}</h2><div class="notice">${b.cancelled ? "Cancelled · final cost " + money(b.fee) : "Agreed cost " + money(b.total)}<br>${money(st.paid)} paid · ${money(st.refunded)} refunds received<br>${money(st.unpaid)} unpaid · ${money(st.pendingRefund)} refund pending</div><p class="small">Only payments and received refunds change actual money. A cancelled booking releases its unpaid obligation; planning funds move to daily spending, but pending refunds stay unavailable.</p>${
+    `<h2>${esc(b.name)}</h2>${b.serviceDate?`<p class="small">Due / service date: ${esc(b.serviceDate)}</p>`:''}<div class="notice">${b.cancelled ? "Cancelled · final cost " + money(b.fee) : "Agreed cost " + money(b.total)}<br>${money(st.paid)} paid · ${money(st.refunded)} refunds received<br>${money(st.unpaid)} unpaid · ${money(st.pendingRefund)} refund pending</div><p class="small">Only payments and received refunds change actual money. A cancelled booking releases its unpaid obligation; planning funds move to daily spending, but pending refunds stay unavailable.</p>${
       t.included
-        ? `<form id="booking-action"><label for="booking-mode">Action</label><select id="booking-mode"><option value="pay">Record actual payment</option><option value="refund">Record refund received</option><option value="link">Link an already-recorded payment / refund</option>${b.cancelled ? '<option value="cancel">Revise final cancellation cost</option>' : '<option value="revise">Revise total agreed cost</option><option value="cancel">Cancel · enter final cancellation cost</option>'}</select><div id="booking-link" hidden><label for="link-record">Existing unlinked record · no new expense</label><select id="link-record">${t.transactions
+        ? `<form id="booking-action"><label for="booking-mode">Action</label><select id="booking-mode"><option value="pay">Record actual payment</option><option value="refund">Record refund received</option><option value="link">Link an already-recorded payment / refund</option>${b.cancelled ? '<option value="cancel">Revise final cancellation cost</option>' : '<option value="revise">Revise total agreed cost</option><option value="service">Change due / service date</option><option value="cancel">Cancel · enter final cancellation cost</option>'}</select><div id="booking-link" hidden><label for="link-record">Existing unlinked record · no new expense</label><select id="link-record">${t.transactions
             .filter((x) => !x.bookingId && x.pool === b.pool)
             .map(
               (x) =>
@@ -357,7 +363,9 @@ function bookingForm(id) {
       $("#booking-fx").hidden = !payment;
       const linking = $("#booking-mode").value === "link";
       $("#booking-link").hidden = !linking;
-      $("#booking-amount").disabled = linking;
+      const service = $("#booking-mode").value === "service";
+      $("#booking-amount").disabled = linking || service;
+      document.querySelector('label[for="booking-action-date"]').textContent = service ? "New due / service date" : "Payment, refund or change date";
       $('label[for="booking-amount"]').textContent = payment
         ? "Amount in " + $("#booking-currency").value
         : $("#booking-mode").value === "revise"
@@ -426,7 +434,10 @@ function bookingForm(id) {
               rate: Number($("#booking-rate").value),
               asOf: today(),
             });
-          else
+          else if(mode === "service") {
+            bk.changes.push({id:uid(),date:today(),type:"service date changed",before:{serviceDate:bk.serviceDate},serviceDate:date,note,total:bk.total});
+            bk.serviceDate=date;
+          } else
             reviseBooking(tr, bk, {
               total: mode === "revise" ? amount : bk.total,
               fee: mode === "cancel" ? amount : 0,
@@ -502,7 +513,7 @@ function render() {
               )
               .join("")
           : '<p class="small">No expense or date corrections recorded.</p>'
-      }</details><div class="card backup"><h2>A copy for safekeeping.</h2><p class="small">Backups include all trips. Save the JSON file to Files on your iPhone. CSV is for spreadsheets and cannot restore the app.</p><p class="small">Last export prepared: ${state.lastBackup ? esc(new Date(state.lastBackup).toLocaleString()) : "No backup yet"}</p>${state.backupNeeded || !state.lastBackup ? '<div class="notice">Keep a fresh backup: you have records that need an export.</div>' : ""}<div class="stack"><button data-action="export">Export all trips · JSON</button><button class="quiet" data-action="import">Restore backup</button><button class="quiet" data-action="csv">Export this trip · CSV</button></div></div><p class="small">Private by design. No financial records are sent to a server. Clearing website data can remove records. Keep a backup outside the app.</p>`;
+      }</details>${backupPanel()}<p class="small">Private by design. No financial records are sent to a server. Clearing website data can remove records. Keep a backup outside the app.</p>`;
   }
 }
 function renderEntries() {
@@ -563,8 +574,9 @@ function tripForm(edit = false) {
               start: tr.start,
               end: tr.end,
               zone: tr.zone,
+              dateCertainty: tr.dateCertainty,
             },
-            after: { name, start, end, zone },
+            after: { name, start, end, zone, dateCertainty: $("#date-certainty").value },
           });
           Object.assign(
             n.trips.find((x) => x.id === t.id),
@@ -778,9 +790,9 @@ function reservations() {
     });
   };
 }
-async function exportFile(content, name, type, full = false) {
+async function exportFile(content, name, type, full = false, share = false) {
   const file = new File([content], name, { type });
-  if (navigator.canShare?.({ files: [file] })) {
+  if (share && navigator.canShare?.({ files: [file] })) {
     await navigator.share({ files: [file], title: "Roam backup" });
   } else {
     const url = URL.createObjectURL(file),
@@ -793,38 +805,47 @@ async function exportFile(content, name, type, full = false) {
   if (full)
     await change((n) => {
       n.lastBackup = new Date().toISOString();
-      n.backupNeeded = false;
+      n.exportRevision = n.revision + 1;
+      // Keep the reminder until the user confirms that this file exists in Files.
     });
   toast("Export prepared. Keep the file in Files; verify it saved.");
 }
 function importFile() {
   modal(
-    `<h2>Restore your notebook</h2><p class="small">Complete recovery restores the shared fund and linked records together in an empty notebook. Into an existing notebook, import read-only references: no duplicated money or expenses.</p><label for="backup-file">JSON backup</label><input id="backup-file" type="file" accept=".json,application/json"><div id="import-preview"></div><button class="quiet" data-action="close">Cancel</button>`,
+    `<h2>Restore your notebook</h2><p class="small">Complete recovery restores the shared fund and linked records together in an empty notebook. Into an existing notebook, import read-only references: no duplicated money or expenses.</p><div class="notice">${!state.trips.length&&!state.fund.initialized?"Empty notebook: recover all live records here.":"This notebook already has records or a fund. Import here creates read-only references. To recover an editable copy, open a separate recovery notebook below; the original is preserved."}</div><button class="quiet" data-action="new-recovery">Open a separate empty recovery notebook</button><label for="backup-file">JSON backup</label><input id="backup-file" type="file" accept=".json,application/json"><div id="import-preview"></div><button class="quiet" data-action="close">Cancel</button>`,
   );
-  $("#backup-file").onchange = () =>
-    action(async () => {
-      $("#import-preview").replaceChildren();
+  let selectedImport=0;
+  $("#backup-file").onchange = async () => {
+    const selection=++selectedImport;
+    $("#import-preview").replaceChildren();
+    await action(async () => {
       const f = $("#backup-file").files[0];
       if (!f) return;
       if (f.size > 20e6) throw Error("Backup exceeds 20 MB.");
       const raw = JSON.parse(await f.text()),
         data = parseBackup(raw),
         full = !state.trips.length && !state.fund.initialized;
+      const fingerprint=await backupFingerprint(raw);
+      if(selection!==selectedImport) return;
+      if((state.importedBackupHashes||[]).includes(fingerprint)) throw Error("This backup was already imported. No new copies were created.");
       $("#import-preview").innerHTML =
         `<div class="notice">${data.trips.length} trips · ${data.trips.reduce((v, t) => v + t.transactions.length, 0)} transactions · ${raw.version === 1 ? "V1 backup: actual fund setup required" : "Shared fund included"}<br>${full ? "Recover all records and fund history." : "Current records and actual money remain unchanged. Copies will be read-only references."}</div><button id="confirm-import">${full ? "Recover notebook" : "Import references"}</button>`;
       $("#confirm-import").onclick = () =>
         action(async () => {
+          if(selection!==selectedImport || $("#backup-file").files[0]!==f) throw Error("Select and review the backup again.");
           await commit(
             restoreBackup(
               structuredClone(state),
               raw,
               full ? "full" : "copies",
+              fingerprint,
             ),
           );
           close();
           toast("Recovery complete. Existing records preserved.");
         });
     });
+  };
 }
 async function action(fn) {
   if (busy) return;
@@ -835,8 +856,13 @@ async function action(fn) {
   try {
     await fn();
   } catch (e) {
+    if(/Another window/.test(e.message||"")) {
+      const banner=$("#conflict");banner.hidden=false;banner.textContent="Another window changed these records. Reload to use the latest saved values. Your unsaved form draft will be kept.";
+      const reload=document.createElement("button");reload.textContent="Reload records · keep draft";reload.dataset.action="reload-records";banner.append(reload);
+      if($("#appearance"))$("#appearance").value=state.settings?.appearance||"system";
+    }
     const error=$("#form-error");
-    if(error && $("#dialog").open) {error.textContent=e.message || "Could not save. Your draft is retained.";error.hidden=false;error.tabIndex=-1;error.focus();}
+    if(error && $("#dialog").open) {error.textContent=e.message || "Could not save. Your draft is retained.";error.hidden=false;error.tabIndex=-1;error.focus();if(/Another window/.test(e.message)){const retry=document.createElement("button");retry.textContent="Reload records · keep draft";retry.dataset.action="reload-records";error.append(retry);}}
     toast(
       e.name === "AbortError"
         ? "Export cancelled."
@@ -884,7 +910,7 @@ document.addEventListener("click", (e) => {
       );
     }
     if (a === "close") close(false);
-    if (a === "verify-backup") { await change(n=>{n.lastBackupVerified=new Date().toISOString();}); toast("File verification noted. Keep your external backup."); }
+    if (a === "verify-backup") { if(!state.lastBackup || state.exportRevision!==state.revision) throw Error("Export a fresh backup, then verify that file in Files."); await change(n=>{n.lastBackupVerified=new Date().toISOString();n.backupNeeded=false;}); toast("File verification noted. Keep your external backup."); }
     if (a === "new-trip") tripForm();
     if (a === "settings") tripForm(true);
     if (a === "expense") expenseForm();
@@ -893,6 +919,10 @@ document.addEventListener("click", (e) => {
     if (a === "reserve") reservations();
     if (a === "close-trip") closeTripForm();
     if (a === "import") importFile();
+    if (a === "new-recovery") { const url=new URL(location.href);url.searchParams.set("notebook","recovery-"+uid());location.assign(url.href); }
+    if (a === "original-notebook") { const url=new URL(location.href);url.searchParams.delete("notebook");location.assign(url.href); }
+    if (a === "reload-records") { rememberDraft();location.reload(); }
+    if (a === "discard-drafts") { drafts.clear();persistDrafts();toast("Unsaved drafts discarded. Saved records unchanged."); }
     if (a === "export")
       await exportFile(
         JSON.stringify(makeBackup(state), null, 2),
@@ -900,6 +930,7 @@ document.addEventListener("click", (e) => {
         "application/json",
         true,
       );
+    if (a === "share-export") await exportFile(JSON.stringify(makeBackup(state),null,2),"roam-backup-"+today()+".json","application/json",true,true);
     if (a === "csv")
       await exportFile(
         csv(trip()),
@@ -989,9 +1020,11 @@ try {
       scope: "./",
     });
     const check = async () => {
-      readyOffline = !!(await caches.match(
-        new URL("./index.html", location.href),
-      ));
+      const controller=navigator.serviceWorker.controller;
+      readyOffline=false;
+      if(controller && controller.scriptURL===new URL("./sw.js",location.href).href) {
+       readyOffline=await new Promise(resolve=>{const channel=new MessageChannel();const timer=setTimeout(()=>resolve(false),3000);channel.port1.onmessage=e=>{clearTimeout(timer);resolve(e.data?.ready===true);channel.port1.close();};controller.postMessage({type:"CHECK_OFFLINE"},[channel.port2]);});
+      }
       status();
     };
     await navigator.serviceWorker.ready;
@@ -1065,10 +1098,10 @@ function applyAppearance(mode) {
 }
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>applyAppearance(state?.settings?.appearance||"system"));
 function backupPanel() {
- return `<section class="card backup"><h2>Keep a copy</h2><p class="small">Complete JSON includes your fund, every trip and accounting history. CSV cannot restore Roam.</p><p class="small">Last export prepared: ${state.lastBackup?esc(new Date(state.lastBackup).toLocaleString()):"Never"}<br>Last file verified: ${state.lastBackupVerified?esc(new Date(state.lastBackupVerified).toLocaleString()):"Not yet"}</p>${state.backupNeeded || !state.lastBackup ? '<div class="notice">Changes need a fresh export.</div>' : '<p class="small">Verify the exported file in Files; export preparation alone does not confirm it was saved.</p>'}<div class="stack"><button data-action="export">Export complete backup · JSON</button><button class="quiet" data-action="import">Restore or import a backup</button><button class="quiet" data-action="verify-backup">I verified the file in Files</button>${trip()?'<button class="link" data-action="csv">Export this trip · CSV</button>':''}</div><p class="small">Clearing website data or losing this device can remove local records. Keep an external copy.</p></section>`;
+ return `<section class="card backup"><h2>Keep a copy</h2><p class="small">Complete JSON includes your fund, every trip and accounting history. CSV cannot restore Roam.</p><p class="small">Last export prepared: ${state.lastBackup?esc(new Date(state.lastBackup).toLocaleString()):"Never"}<br>Last file verified: ${state.lastBackupVerified?esc(new Date(state.lastBackupVerified).toLocaleString()):"Not yet"}</p>${state.backupNeeded || !state.lastBackup ? '<div class="notice">Changes need a fresh export.</div>' : '<p class="small">Verify the exported file in Files; export preparation alone does not confirm it was saved.</p>'}<div class="stack"><button data-action="export">Download complete backup · JSON</button><button class="quiet" data-action="share-export">Share backup / Save to Files</button><button class="quiet" data-action="import">Restore or import a backup</button><button class="quiet" data-action="verify-backup">I verified the file in Files</button>${trip()?'<button class="link" data-action="csv">Export this trip · CSV</button>':''}</div><p class="small">Clearing website data or losing this device can remove local records. Keep an external copy.</p></section>`;
 }
 function renderSettings() {
- $("#main").innerHTML=`<h1>Settings & backups</h1><section class="card"><h2>Appearance</h2><label for="appearance">Theme</label><select id="appearance">${options(["system","light","dark"],state.settings?.appearance||"system")}</select><p class="small">System follows your device. Your choice works offline.</p></section>${backupPanel()}`;
+ $("#main").innerHTML=`<h1>Settings & backups</h1>${/^recovery-[0-9a-f-]{36}$/.test(new URLSearchParams(location.search).get("notebook")||"")?'<div class="notice">Separate recovery notebook. Original records are untouched. Keep this URL to reopen this copy; the normal Home Screen icon opens the original.<button class="link" data-action="original-notebook">Return to original notebook</button></div>':''}${drafts.size?'<button class="link" data-action="discard-drafts">Discard retained unsaved drafts</button>':''}<section class="card"><h2>Appearance</h2><label for="appearance">Theme</label><select id="appearance">${options(["system","light","dark"],state.settings?.appearance||"system")}</select><p class="small">System follows your device. Your choice works offline.</p></section>${backupPanel()}`;
  $("#appearance").onchange=e=>action(async()=>{const mode=e.target.value;await change(n=>{n.settings={...n.settings,appearance:mode};});});
 }
 function renderMoney() {
@@ -1090,3 +1123,5 @@ function closeTripForm() {
  modal(`<h2>Close ${esc(t.name)}?</h2><p class="small">Release ${money(released)} of unused allocation to your shared fund. Actual money remains ${money(fundStats(state).actual,state.fund.currency)}. Every expense, payment and history entry is retained. No unpaid commitment or pending refund can be skipped.</p><form id="close-trip-form">${field("close-reason","Reason","Trip finished","text",'required maxlength="800"')}${footer("Close & release unused allocation")}</form>`);
  $("#close-trip-form").onsubmit=e=>{e.preventDefault();action(async()=>{await change(n=>closeTrip(n,n.trips.find(x=>x.id===t.id),today(),$("#close-reason").value.trim()));close();toast("Trip closed. Cash unchanged; unused allocation released.");});};
 }
+
+window.addEventListener("pagehide",rememberDraft);

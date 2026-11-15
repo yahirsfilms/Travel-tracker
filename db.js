@@ -1,4 +1,8 @@
-const NAME = "travel-tracker-v1";
+export function notebookName(search = globalThis.location?.search || "") {
+ const id=new URLSearchParams(search).get("notebook");
+ return /^recovery-[0-9a-f-]{36}$/.test(id || "") ? "travel-tracker-v1-"+id : "travel-tracker-v1";
+}
+const NAME = notebookName();
 export function openDB() {
   return new Promise((resolve, reject) => {
     const r = indexedDB.open(NAME, 1);

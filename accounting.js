@@ -500,6 +500,7 @@ export function linkBookingRecord(t, b, transactionId, date, note) {
 }
 
 export function validateState(s) {
+  if(s.importedBackupHashes !== undefined && (!Array.isArray(s.importedBackupHashes) || s.importedBackupHashes.length>1000 || !s.importedBackupHashes.every(x=>typeof x==="string" && /^[0-9a-f]{64}$/.test(x)))) fail("Invalid backup import history.");
   if (s.settings !== undefined && (!s.settings || typeof s.settings !== "object" || (s.settings.appearance !== undefined && !["light","dark","system"].includes(s.settings.appearance)))) fail("Invalid appearance settings.");
   if (
     s.schemaVersion !== 2 ||
@@ -560,6 +561,7 @@ export function validateState(s) {
         !Array.isArray(b.changes)
       )
         fail("Invalid booking.");
+      if(b.serviceDate !== undefined)dayNumber(b.serviceDate);
       ids.add(b.id);
       for (const e of b.changes) dayNumber(e.date);
       const st = bookingStatus(t, b);
@@ -573,6 +575,14 @@ export function validateState(s) {
           t.bookings.find((b) => b.id === x.bookingId).pool !== x.pool)
       )
         fail("Payment has no matching booking.");
+  }
+  for(const t of s.trips) {
+    for(const x of t.transactions.filter(x=>x.refundOf)) {
+      const original=t.transactions.find(o=>o.id===x.refundOf && o.base>0 && !o.bookingId);
+      if(!original || x.base>=0 || original.pool!==x.pool || x.bookingId) fail("Invalid linked refund.");
+      const refunded=-sum(t.transactions.filter(r=>r.refundOf===original.id).map(r=>r.base));
+      if(refunded>original.base) fail("Linked refunds exceed the original expense.");
+    }
   }
   if (!s.fund.initialized && s.fund.ledger.length)
     fail("Uninitialized fund contains money.");
@@ -624,6 +634,7 @@ export function makeBackup(s) {
     trips: structuredClone(s.trips),
     referenceFunds: structuredClone(s.referenceFunds || []),
     ...(s.settings ? {settings: structuredClone(s.settings)} : {}),
+    ...(s.importedBackupHashes ? {importedBackupHashes: [...s.importedBackupHashes]} : {}),
   };
 }
 export function parseBackup(data) {
@@ -645,16 +656,18 @@ export function parseBackup(data) {
     revision: 0,
     active: data.trips[0]?.id || null,
     ...(data.settings ? {settings: structuredClone(data.settings)} : {}),
+    ...(data.importedBackupHashes ? {importedBackupHashes: [...data.importedBackupHashes]} : {}),
   });
 }
-export function restoreBackup(s, data, mode = "copies") {
+export function restoreBackup(s, data, mode = "copies", fingerprint) {
+  if (fingerprint && (s.importedBackupHashes || []).includes(fingerprint)) fail("This backup has already been imported. Your records are unchanged.");
   const restored = parseBackup(data);
   if (mode === "full") {
     if (s.trips.length || s.fund.initialized)
       fail(
         "Full recovery requires an empty notebook. Import references to preserve current records.",
       );
-    return { ...s, ...restored, revision: s.revision, backupNeeded: true };
+    return { ...s, ...restored, revision: s.revision, backupNeeded: true, ...(fingerprint ? {importedBackupHashes:[...new Set([...(restored.importedBackupHashes||[]),fingerprint])]} : {}) };
   }
   s.referenceFunds ??= [];
   const map = new Map();
@@ -680,6 +693,7 @@ export function restoreBackup(s, data, mode = "copies") {
     if (t.currency === s.fund.currency) t.fundRate = 1;
     s.trips.push(t);
   }
+  if(fingerprint) s.importedBackupHashes=[...(s.importedBackupHashes||[]),fingerprint];
   s.backupNeeded = true;
   validateState(s);
   return s;

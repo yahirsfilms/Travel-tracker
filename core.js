@@ -207,3 +207,10 @@ export function csv(trip) {
     .map((r) => r.map(cell).join(","))
     .join("\r\n");
 }
+
+// Ignore export timestamps and object-key order when detecting an already imported backup.
+export async function backupFingerprint(data) {
+ const canonical=value=>Array.isArray(value)?value.map(canonical):value && typeof value === "object" ? Object.fromEntries(Object.keys(value).filter(k=>k!=="exportedAt").sort().map(k=>[k,canonical(value[k])])) : value;
+ const bytes=new TextEncoder().encode(JSON.stringify(canonical(data)));
+ return [...new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))].map(x=>x.toString(16).padStart(2,"0")).join("");
+}

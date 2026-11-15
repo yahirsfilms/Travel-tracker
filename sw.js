@@ -1,4 +1,4 @@
-const CACHE = "roam-shell-v1.1.3-accounting";
+const CACHE = "roam-shell-v1.2.3-refinement";
 const ASSETS = [
   "./",
   "./index.html",
@@ -18,6 +18,7 @@ self.addEventListener("install", (event) =>
 );
 self.addEventListener("message", (event) => {
   if (event.data === "ACTIVATE") self.skipWaiting();
+  if (event.data?.type === "CHECK_OFFLINE") event.waitUntil((async()=>{const cache=await caches.open(CACHE);const matches=await Promise.all(ASSETS.map(asset=>cache.match(asset)));event.ports?.[0]?.postMessage({ready:matches.every(Boolean),version:CACHE});})());
 });
 self.addEventListener("activate", (event) =>
   event.waitUntil(

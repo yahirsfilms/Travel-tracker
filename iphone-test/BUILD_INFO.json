@@ -1,0 +1,31 @@
+{
+  "sourceRevision": "a1b2abcc8a4cf3924b69d125e17ee3dafc877cf7",
+  "testOnly": true,
+  "databasePrefix": "roam-iphone-test-",
+  "cachePrefix": "roam-iphone-test-shell-",
+  "appearanceKey": "roam-iphone-test-appearance",
+  "draftPrefix": "roam-iphone-test-drafts:",
+  "files": {
+    "sw.js": "e007ff11d6a424ba892268a622df42623a3bacb999fb6adaf8f0023094ff57c8",
+    "index.html": "7fc7ad4014f230229ef58039e74761fa87f1ccde4fee6db1380d7eb906c95dc6",
+    "style.css": "4892f52a46ba0b0c43619b944551a90be84b30c70c0b7fa771a33f7a74d5a8e4",
+    "app.js": "f9b4f634378d5d8c20e076c11f837ab379c67082b8b62e298c01ea0d58b12a0b",
+    "core.js": "3805e2d3a6b6ed744986ac526664d8165d05894d184964c2995957078223673e",
+    "accounting.js": "d97792a4e22402f2027f3db28284a1db2d5aaf16ac2e18827d3f02dca91cb6ec",
+    "insights.js": "ea3cb5fa6d0f2a0ebb82869a9159c1cc367e473dc955f9758537ee8d70c1f4f8",
+    "appearance.js": "731ca5fb429b87e1ed43e713cf5ae0ec1b585225f6d59d872f9e56ce273f1478",
+    "backup-file.js": "3a1be96d95f5b85b5882c8c0b22bb56357e12cc80608799a8e2b9fec3c09b338",
+    "reference-views.js": "c841fd16a044dc6d3b70b1d3e14109ccd2fd199453eaf913604e4bd498ae556d",
+    "fixed-budget.js": "273d532088274b8c4ec37a266ee4386612d91d7469558d00d6be062cd39643a8",
+    "coordinated-budget.js": "9e51685cded4cc2f588b01d160109e52d3ec3545f8a1abb3f6c06f79a2196838",
+    "multi-trip-planning.js": "a1c737ce949fcd467b3ff5f57fd96f4c60d8282185ce97ee46ce6d1f012975d6",
+    "planning.js": "c4287990a53107144fce2e1726bfbbf9155cb85d6581c76d9efb44be7fc1728b",
+    "planning-clock.js": "57ec2d77b28827f969178dde445b93ca699d48c499a8731e03c96be584abcd3a",
+    "db.js": "a65eb69a1329f9eb031838e993076f66fe323e0f3c3c33268e2fd299746c2df9",
+    "manifest.webmanifest": "2e0c364515839867e5d839ceee45dbb9a3ca30afec38d1db1a822ca33d22ca12",
+    "icon.svg": "b12a4913fbf145899fbe04f03fef2892b793481039e7647b9e1ae95e0f6eadc8",
+    "icon-192.png": "265c3f23ceb5bdff3f789511459ee83749ab3429ad3b8c152ba01095874fc0bf",
+    "icon-512.png": "55b42079143ffa72e47c2e0cdfd6a563069f03d7a6973a86bde43495e76b6cc1",
+    "apple-touch-icon.png": "00725bc06ac6443d54c3ec7051b149f4b81b3107363d0a9639bff5eb333d54d8"
+  }
+}

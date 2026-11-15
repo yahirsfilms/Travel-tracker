@@ -1,4 +1,4 @@
-const CACHE = "roam-iphone-test-shell-v1.6.7-nightly-qualified";
+const CACHE = "roam-iphone-test-shell-v1.7.6-product-qualified";
 const ASSETS = [
   "./",
   "./index.html",
@@ -11,6 +11,8 @@ const ASSETS = [
   "./budget-preview.js",
   "./fund-preview.js",
   "./money-action-copy.js",
+  "./move-selection.js",
+  "./daily-presentation.js",
   "./reserve-card.js",
   "./appearance.js",
   "./backup-file.js",

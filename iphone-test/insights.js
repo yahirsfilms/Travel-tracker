@@ -18,11 +18,11 @@ export function historyRecords(s,{tripId=s.active,from='',to='',category='',pool
  .sort((a,b)=>b.date.localeCompare(a.date)||b.index-a.index||a.tripId.localeCompare(b.tripId));
 }
 export function spendingSummary(records){
- const byCategory=new Map();let expenses=0,refunds=0;
- for(const x of records){const n=x.displayAmount??x.base;if(n>0)expenses+=n;else refunds-=n;byCategory.set(x.category,(byCategory.get(x.category)||0)+n);}
- return {expenses,refunds,net:expenses-refunds,categories:[...byCategory].map(([name,amount])=>({name,amount})).sort((a,b)=>b.amount-a.amount)};
+ const byCategory=new Map();let expenses=0,refunds=0,credits=0;
+ for(const x of records){const n=x.displayAmount??x.base;if(n>0)expenses+=n;else if(x.unmatchedCredit)credits-=n;else refunds-=n;byCategory.set(x.category,(byCategory.get(x.category)||0)+n);}
+ return {expenses,refunds,credits,net:expenses-refunds-credits,categories:[...byCategory].map(([name,amount])=>({name,amount})).sort((a,b)=>b.amount-a.amount)};
 }
 export function completedTripSummary(t,projection){
  const totals=spendingSummary(t.transactions);
- return {...totals,purchases:t.transactions.filter(x=>x.base>0).length,refundRecords:t.transactions.filter(x=>x.base<0).length,savings:projection?.balances.savings??null,earnedSavings:projection?.earnedSavings??null,unpaid:t.bookings.reduce((n,b)=>n+bookingStatus(t,b).unpaid,0),pendingRefund:t.bookings.reduce((n,b)=>n+bookingStatus(t,b).pendingRefund,0)};
+ return {...totals,purchases:t.transactions.filter(x=>x.base>0).length,refundRecords:t.transactions.filter(x=>x.base<0&&!x.unmatchedCredit).length,savings:projection?.balances.savings??null,earnedSavings:projection?.earnedSavings??null,unpaid:t.bookings.reduce((n,b)=>n+bookingStatus(t,b).unpaid,0),pendingRefund:t.bookings.reduce((n,b)=>n+bookingStatus(t,b).pendingRefund,0)};
 }

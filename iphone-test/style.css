@@ -115,3 +115,18 @@ body{color:var(--ink);background:var(--bg)}.card{background:var(--surface)}.mone
 .expense-budget-summary{margin:.65rem 0 .15rem;font-weight:650}#expense-budget-options{margin:0}#expense-budget-options summary{padding:.5rem 0}#expense-balance-preview{padding:.65rem;background:var(--soft);border-radius:.65rem;overflow-wrap:anywhere}#expense-cover{margin:.6rem 0}#expense-cover summary{font-size:.875rem}.overspend-explanation{margin:.6rem 0;color:var(--muted);line-height:1.5}.daily-tools{gap:.75rem;flex-wrap:wrap}.shell{padding-bottom:calc(120px + env(safe-area-inset-bottom))}html{scroll-padding-bottom:calc(120px + env(safe-area-inset-bottom))}.hero.hero-over .daily-progress{margin-bottom:.8rem}.hero.hero-over .mode-label{color:var(--hero-muted)}
 
 .hero.hero-over .hero-detail{color:#FFAFB7!important}
+
+/* Focused phone usability refinement: presentation only. */
+:root[data-dark=true]{--muted:#C5D5CB;--line:#496655}
+#expense-form .small,#expense-form .field-hint{font-size:.8125rem;line-height:1.5}
+#expense-form .field-hint:empty,#expense-context:empty,#expense-cover-context:empty{display:none}
+#expense-balance-preview{font-size:.875rem;line-height:1.5;border:1px solid var(--line);margin:.65rem 0}
+#expense-balance-preview.negative{background:var(--error-bg);border-color:var(--negative)}
+#expense-shortfall-transfer{width:100%;text-align:left;margin:0 0 .5rem}
+#expense-form .actions button[type=submit],#confirm-expense-move button[type=submit]{background:var(--action-bg);color:var(--action-ink);flex:1.4}
+#expense-form .actions .quiet{border:1px solid var(--line)}
+#expense-form .expense-save{border-top:1px solid var(--line);z-index:1}
+.pool-strip .reserve-card .reserve-caption,.pool-strip .reserve-card .reserve-spent{font-size:.75rem}
+.reserve-over-label{display:block;font-size:.8125rem;line-height:1.4;font-weight:650;letter-spacing:0}
+#toast{bottom:calc(74px + env(safe-area-inset-bottom));max-width:min(90vw,38rem);width:max-content;padding:.65rem .9rem;pointer-events:none;box-shadow:0 3px 14px #0003}
+body:has(dialog[open]) #toast{display:none!important}

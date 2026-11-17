@@ -1,4 +1,4 @@
-const CACHE = "roam-iphone-test-shell-v1.8.0-purchase-clarity-qa2";
+const CACHE = "roam-iphone-test-shell-v1.8.1-phone-refinement";
 const ASSETS = [
   "./",
   "./index.html",

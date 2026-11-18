@@ -11,12 +11,12 @@ export function expenseBalance(state,pool,date,{instant=Date.now()}={}){
  if(pool==='unassigned')return fundStats(state).unallocated;
  const t=state.trips.find(t=>t.id===state.active);return poolBudget(t,pool)-spent(t,pool);
 }
-function sourceAvailable(state,pool,date,instant){
+export function expenseMoveAvailable(state,pool,date,instant=Date.now()){
  if(state.fixedBudget){const x=fixedProjection(state,date,{instant});return pool==='unassigned'?(x.global?.availableToAllocate??x.transferable.unassigned):x.transferable[pool];}
  if(pool==='unassigned')return Math.max(0,fundStats(state).unallocated);
  return transferableBudget(state.trips.find(t=>t.id===state.active),pool);
 }
-export function previewExpense(state,{record,oldId,bookingId,move,date,instant=Date.now()}){
+export function previewExpense(state,{record,oldId,bookingId,move,date,instant=Date.now(),includeDetails=true}){
  let candidate=structuredClone(state);
  const pool=record.fundingSource||record.pool;
  if(move){
@@ -36,5 +36,17 @@ export function previewExpense(state,{record,oldId,bookingId,move,date,instant=D
  t.rates={...t.rates,[record.currency]:record.rate};t.expenseCurrency=record.currency;
  if(candidate.fixedBudget)settleFixedFunding(candidate,date);
  validateState(candidate);
- return {candidate,sourceBefore:move?sourceAvailable(state,move.from,date,instant):null,sourceAfter:move?sourceAvailable(candidate,move.from,date,instant):null,before:expenseBalance(state,pool,date,{instant}),after:expenseBalance(candidate,pool,date,{instant}),dailyBefore:dailyOutlook(state,state.active,date,{instant}),dailyAfter:dailyOutlook(candidate,candidate.active,date,{instant})};
+ const result = {
+  candidate,
+  before: expenseBalance(state,pool,date,{instant}),
+  after: expenseBalance(candidate,pool,date,{instant}),
+ };
+ if (!includeDetails) return result;
+ return {
+  ...result,
+  sourceBefore: move ? expenseMoveAvailable(state,move.from,date,instant) : null,
+  sourceAfter: move ? expenseMoveAvailable(candidate,move.from,date,instant) : null,
+  dailyBefore: dailyOutlook(state,state.active,date,{instant}),
+  dailyAfter: dailyOutlook(candidate,candidate.active,date,{instant}),
+ };
 }

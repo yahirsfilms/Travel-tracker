@@ -6,11 +6,11 @@
   "appearanceKey": "roam-iphone-test-appearance",
   "draftPrefix": "roam-iphone-test-drafts:",
   "files": {
-    "sw.js": "82280b3446c9ad5ec4010e3fa3d8b25c7f8c3be717e05a53c4ee285afa0c59c1",
-    "index.html": "ca562c2dd3f02333e119511d4f7e5fed96761fd7aaef737237338a3554799b5c",
-    "style.css": "49e8099c3678287e6ddc9b7e2d5a9de38ebdb0852a075bf21d49840fb9470ba0",
-    "app.js": "34eec54c53a4c9afa6b8a51d4f1c173cc6f6c37cdfa5174738bc39f37d9113bc",
-    "expense-review.js": "0c811a555f8eac5cecd232afdbebb17735b598dd27bcb4271bb43efe1b28d608",
+    "sw.js": "74dd9825527308af77b472c623a9a9e63e7bcc248450706d044c1e39d5c3ff5f",
+    "index.html": "036a9fb448c68e71b94cad384fd06d87f4add525dc33b426fc2847b534d85c44",
+    "style.css": "334dfe61b4348fb51824f826ee0134401198b7dd3a2763d83fe66ed49aeb7b22",
+    "app.js": "33ca7b60d23bcfe8897476e044fb70884a587f3d362e11cff73a2f1e952edfaa",
+    "expense-review.js": "d7c7c8bd97bd737c28351f250d75ea942757dc9bb21b911c2afa8aeda0285958",
     "core.js": "3805e2d3a6b6ed744986ac526664d8165d05894d184964c2995957078223673e",
     "accounting.js": "d97792a4e22402f2027f3db28284a1db2d5aaf16ac2e18827d3f02dca91cb6ec",
     "insights.js": "8640eb53e92c7d431b21582cb638f10e0a159b25b0b407fbd531a5bd4383f6c5",
@@ -21,7 +21,7 @@
     "move-selection.js": "c0e148d45ac82d3406703903578ed08fd8752bdc64bdd7886f82beabb65ad098",
     "daily-presentation.js": "bb8bd5b57c83d508d35fa7a963a3adfa57706703594d88c414c26239fb60e84a",
     "transaction-presentation.js": "28e080bd104b79227cee2e797c01349de0ccb6aa0f579920d5c160f972ac2e72",
-    "reserve-card.js": "4a3c1a9b88bc6f6f189c244567a1c09b7033cb79aff73207a7d50eaa6d427961",
+    "reserve-card.js": "2796e1550479daf45c256e253628174668e30389fd501910bcc5fd9f3c93c745",
     "appearance.js": "731ca5fb429b87e1ed43e713cf5ae0ec1b585225f6d59d872f9e56ce273f1478",
     "backup-file.js": "3a1be96d95f5b85b5882c8c0b22bb56357e12cc80608799a8e2b9fec3c09b338",
     "reference-views.js": "c841fd16a044dc6d3b70b1d3e14109ccd2fd199453eaf913604e4bd498ae556d",
@@ -36,5 +36,6 @@
     "icon-192.png": "265c3f23ceb5bdff3f789511459ee83749ab3429ad3b8c152ba01095874fc0bf",
     "icon-512.png": "55b42079143ffa72e47c2e0cdfd6a563069f03d7a6973a86bde43495e76b6cc1",
     "apple-touch-icon.png": "00725bc06ac6443d54c3ec7051b149f4b81b3107363d0a9639bff5eb333d54d8"
-  }
+  },
+  "buildLabel": "2026-11-18 faster expense flow"
 }

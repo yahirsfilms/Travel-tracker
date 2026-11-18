@@ -130,3 +130,7 @@ body{color:var(--ink);background:var(--bg)}.card{background:var(--surface)}.mone
 .reserve-over-label{display:block;font-size:.8125rem;line-height:1.4;font-weight:650;letter-spacing:0}
 #toast{bottom:calc(74px + env(safe-area-inset-bottom));max-width:min(90vw,38rem);width:max-content;padding:.65rem .9rem;pointer-events:none;box-shadow:0 3px 14px #0003}
 body:has(dialog[open]) #toast{display:none!important}
+
+#expense-form #expense-budget-summary {font-weight:650}
+#expense-form .expense-save {padding-bottom:max(.65rem,env(safe-area-inset-bottom))}
+#expense-form input, #expense-form select {scroll-margin-bottom:5rem}
